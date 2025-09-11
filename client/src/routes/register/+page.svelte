@@ -1,9 +1,19 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
+
+    // --- ESTADO DEL COMPONENTE ---
     let isLoading = false;
     let passwordFieldType = 'password';
     let confirmPasswordFieldType = 'password';
+    let formError = ''; // Variable para guardar mensajes de error
+    let formData = {
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: ''
+    };
 
+    // --- FUNCIONES ---
     function togglePasswordVisibility() {
         passwordFieldType = passwordFieldType === 'password' ? 'text' : 'password';
     }
@@ -12,13 +22,50 @@
         confirmPasswordFieldType = confirmPasswordFieldType === 'password' ? 'text' : 'password';
     }
 
+    // --- LÓGICA DE ENVÍO DEL FORMULARIO ---
     async function handleSubmit() {
         isLoading = true;
-        // Lógica futura para enviar al backend
-        await new Promise(res => setTimeout(res, 1500)); // Simulación
-        isLoading = false;
-        // Redirige al dashboard
-        goto('/dashboard');
+        formError = ''; // Resetea el error en cada intento
+
+        // 1. Validación simple en el frontend
+        if (formData.password !== formData.confirmPassword) {
+            formError = 'Las contraseñas no coinciden.';
+            isLoading = false;
+            return; // Detiene el envío
+        }
+
+        try {
+            // 2. Enviamos los datos al backend usando fetch
+            const response = await fetch('http://localhost:3000/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: formData.name,
+                    email: formData.email,
+                    password: formData.password,
+                }),
+            });
+
+            const result = await response.json();
+
+            // 3. Manejamos la respuesta del servidor
+            if (!response.ok) {
+                // Si el servidor responde con un error (ej: email ya existe), lo mostramos
+                throw new Error(result.error || 'Ocurrió un error al registrar el usuario.');
+            }
+
+            // 4. Si todo salió bien, redirigimos al dashboard
+            await goto('/dashboard');
+
+        } catch (error) {
+            // Si hay un error en la comunicación o del servidor, lo mostramos
+            formError = error.message;
+        } finally {
+            // Pase lo que pase, detenemos la animación de carga
+            isLoading = false;
+        }
     }
 </script>
 
@@ -39,16 +86,16 @@
         <form on:submit|preventDefault={handleSubmit}>
             <div class="form-group">
                 <label for="name">Nombre Completo</label>
-                <input type="text" id="name" name="name" required placeholder="Tu Nombre y Apellido" />
+                <input type="text" id="name" name="name" required placeholder="Tu Nombre y Apellido" bind:value={formData.name} />
             </div>
             <div class="form-group">
                 <label for="email">Correo Electrónico</label>
-                <input type="email" id="email" name="email" required placeholder="tu@correo.com" />
+                <input type="email" id="email" name="email" required placeholder="tu@correo.com" bind:value={formData.email} />
             </div>
             <div class="form-group">
                 <label for="password">Contraseña</label>
                 <div class="password-group">
-                    <input type={passwordFieldType} id="password" name="password" required placeholder="Mínimo 8 caracteres" />
+                    <input type={passwordFieldType} id="password" name="password" required placeholder="Mínimo 8 caracteres" bind:value={formData.password} />
                      <button type="button" class="password-toggle" on:click={togglePasswordVisibility} aria-label="Mostrar u ocultar contraseña">
                         {#if passwordFieldType === 'password'}
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -61,7 +108,7 @@
              <div class="form-group">
                 <label for="confirm-password">Confirmar Contraseña</label>
                 <div class="password-group">
-                    <input type={confirmPasswordFieldType} id="confirm-password" name="confirm-password" required placeholder="Repite tu contraseña" />
+                    <input type={confirmPasswordFieldType} id="confirm-password" name="confirm-password" required placeholder="Repite tu contraseña" bind:value={formData.confirmPassword} />
                      <button type="button" class="password-toggle" on:click={toggleConfirmPasswordVisibility} aria-label="Mostrar u ocultar contraseña">
                         {#if confirmPasswordFieldType === 'password'}
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -71,6 +118,11 @@
                     </button>
                 </div>
             </div>
+
+            {#if formError}
+                <p class="error-message">{formError}</p>
+            {/if}
+
             <button type="submit" class="btn-primary" disabled={isLoading}>
                 {#if isLoading}
                     <div class="spinner"></div>
