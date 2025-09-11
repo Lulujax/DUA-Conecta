@@ -1,54 +1,43 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
+    import { user } from '$lib/stores/auth'; // <-- 1. Importamos nuestro store
 
-    // --- ESTADO DEL COMPONENTE ---
     let isLoading = false;
     let passwordFieldType = 'password';
-    let formError = ''; // Variable para guardar mensajes de error
-    let formData = {
-        email: '',
-        password: ''
-    };
+    let formError = '';
+    let formData = { email: '', password: '' };
 
-    // --- FUNCIONES ---
     function togglePasswordVisibility() {
         passwordFieldType = passwordFieldType === 'password' ? 'text' : 'password';
     }
 
-    // --- LÓGICA DE ENVÍO DEL FORMULARIO ---
     async function handleSubmit() {
         isLoading = true;
-        formError = ''; // Resetea el error en cada intento
+        formError = '';
 
         try {
-            // 1. Enviamos los datos al endpoint de login del backend
             const response = await fetch('http://localhost:3000/auth/login', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    email: formData.email,
-                    password: formData.password,
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData),
             });
 
             const result = await response.json();
 
-            // 2. Si el servidor responde con un error (ej: credenciales incorrectas), lo mostramos
             if (!response.ok) {
                 throw new Error(result.error || 'Ocurrió un error al iniciar sesión.');
             }
 
-            // 3. Si todo salió bien, redirigimos al dashboard
-            // NOTA: Más adelante, aquí guardaremos el token de sesión que nos envíe el backend.
+            // <-- 2. Si el login es exitoso, guardamos el token y los datos en el store
+            user.set({
+                token: result.token
+            });
+
             await goto('/dashboard');
 
         } catch (error) {
-            // Si hay un error en la comunicación o del servidor, lo mostramos
             formError = error.message;
         } finally {
-            // Pase lo que pase, detenemos la animación de carga
             isLoading = false;
         }
     }
@@ -89,11 +78,9 @@
             <div class="forgot-password-link">
                 <a href="#_">¿Olvidaste tu contraseña?</a>
             </div>
-
             {#if formError}
                 <p class="error-message">{formError}</p>
             {/if}
-
             <button type="submit" class="btn-primary" disabled={isLoading}>
                 {#if isLoading}
                     <div class="spinner"></div>
@@ -102,7 +89,6 @@
                 {/if}
             </button>
         </form>
-
         <div class="switch-link">
             <p>¿No tienes una cuenta? <a href="/register">Regístrate</a></p>
         </div>

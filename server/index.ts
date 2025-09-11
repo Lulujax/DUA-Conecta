@@ -1,36 +1,29 @@
 import { Elysia, t } from 'elysia';
 import { cors } from '@elysiajs/cors';
+import { jwt } from '@elysiajs/jwt';
+import { env } from 'elysia-env'; // <-- 1. IMPORTAMOS elysia-env
 import postgres from 'postgres';
 import { z } from 'zod';
+import 'dotenv/config';
 
-// --- 1. CONFIGURACIÓN DE LA BASE DE DATOS ---
-const sql = postgres('postgres://postgres:tu_contraseña@localhost:5432/dua_conecta_db', {
-  // Opciones de conexión
-});
-
-console.log('Conectado a la base de datos PostgreSQL.');
-
-// --- 2. DEFINICIÓN DE ESQUEMAS DE VALIDACIÓN CON ZOD ---
-const RegisterSchema = z.object({
-  name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
-  email: z.string().email("El correo electrónico no es válido."),
-  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
-});
-
-// NUEVO: Esquema para la validación del login
-const LoginSchema = z.object({
-  email: z.string().email("El correo electrónico no es válido."),
-  password: z.string().min(1, "La contraseña es requerida."),
-});
 
 const app = new Elysia()
+  // --- 2. USAMOS elysia-env PARA CARGAR EL ARCHIVO .env ---
+  .use(env({
+    JWT_SECRET: t.String()
+  }))
   .use(cors())
+  .use(jwt({
+    name: 'jwt',
+    // Ahora 'secret' es accesible a través de 'app.env'
+    secret: (app) => app.env.JWT_SECRET,
+  }))
   
-  // --- 3. GRUPO DE RUTAS PARA AUTENTICACIÓN ---
+  // El resto del código permanece igual...
   .group('/auth', (app) => 
     app
-      // --- ENDPOINT PARA EL REGISTRO DE USUARIOS ---
       .post('/register', async ({ body, set }) => {
+        const RegisterSchema = z.object({ name: z.string().min(3), email: z.string().email(), password: z.string().min(8) });
         const validation = RegisterSchema.safeParse(body);
         if (!validation.success) {
           set.status = 400;
@@ -40,18 +33,19 @@ const app = new Elysia()
         const { name, email, password } = validation.data;
 
         try {
+          const sql = postgres('postgres://postgres:tu_contraseña@localhost:5432/dua_conecta_db');
           const hashedPassword = await Bun.password.hash(password);
           await sql`
             INSERT INTO users (name, email, password_hash)
             VALUES (${name}, ${email}, ${hashedPassword})
           `;
           
-          console.log(`Usuario registrado exitosamente: ${email}`);
           set.status = 201;
           return { success: true, message: '¡Usuario registrado exitosamente!' };
 
         } catch (error) {
-          if (error instanceof postgres.PostgresError && error.code === '23505') {
+          const sql = postgres();
+          if (error instanceof sql.PostgresError && error.code === '23505') {
             set.status = 409;
             return { error: 'El correo electrónico ya está en uso.' };
           }
@@ -61,47 +55,47 @@ const app = new Elysia()
         }
       })
 
-      // --- NUEVO: ENDPOINT PARA EL LOGIN DE USUARIOS ---
-      .post('/login', async ({ body, set }) => {
-        // a. Validar los datos de entrada
+      .post('/login', async ({ jwt, body, set }) => {
+        const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
         const validation = LoginSchema.safeParse(body);
         if (!validation.success) {
-            set.status = 400; // Bad Request
+            set.status = 400;
             return { error: "Datos de entrada inválidos." };
         }
 
         const { email, password } = validation.data;
 
         try {
-            // b. Buscar al usuario por su correo electrónico en la base de datos
+            const sql = postgres('postgres://postgres:tu_contraseña@localhost:5432/dua_conecta_db');
             const users = await sql`
                 SELECT id, name, password_hash FROM users WHERE email = ${email}
             `;
 
-            // c. Si no se encuentra ningún usuario, las credenciales son incorrectas
             if (users.length === 0) {
-                set.status = 401; // Unauthorized
+                set.status = 401;
                 return { error: "Correo o contraseña incorrectos." };
             }
 
             const user = users[0];
-
-            // d. Verificar que la contraseña enviada coincida con la encriptada en la BD
             const isMatch = await Bun.password.verify(password, user.password_hash);
 
             if (!isMatch) {
-                set.status = 401; // Unauthorized
+                set.status = 401;
                 return { error: "Correo o contraseña incorrectos." };
             }
 
-            // e. Si todo coincide, el inicio de sesión es exitoso
-            // NOTA: Más adelante, aquí generaremos un token de sesión (JWT) para mantener al usuario conectado.
-            console.log(`Inicio de sesión exitoso para: ${email}`);
-            set.status = 200; // OK
+            const token = await jwt.sign({
+              userId: user.id,
+              name: user.name,
+              exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7),
+            });
+
+            console.log(`Token generado para: ${email}`);
+            set.status = 200;
             return { 
                 success: true, 
-                message: '¡Inicio de sesión exitoso!', 
-                user: { id: user.id, name: user.name } 
+                message: '¡Inicio de sesión exitoso!',
+                token: token
             };
 
         } catch (error) {

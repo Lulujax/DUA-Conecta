@@ -1,3 +1,15 @@
+<script lang="ts">
+    import { goto } from '$app/navigation';
+    import { user } from '$lib/stores/auth';
+
+    function logout() {
+        // Limpiamos el store, lo que también limpiará localStorage
+        user.set(null);
+        // Redirigimos a la página de inicio
+        goto('/');
+    }
+</script>
+
 <svelte:head>
     <title>Panel de Control - DUA-Conecta</title>
 </svelte:head>
@@ -6,7 +18,7 @@
     <div class="dashboard-content">
         <h1>¡Bienvenido a tu Panel de Control!</h1>
         <p>Aquí podrás gestionar tus estudiantes, plantillas y crear nuevas actividades.</p>
-        <button class="btn-secondary">Cerrar Sesión</button>
+        <button on:click={logout} class="btn-secondary">Cerrar Sesión</button>
     </div>
 </div>
 
