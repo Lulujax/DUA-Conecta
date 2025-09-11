@@ -16,8 +16,13 @@
 			<path d="M0,0 L1,2 C1.5,3 1.5,3 2,3 L2,0 Z" />
 		</svg>
 		<ul>
-			<li aria-current={page.url.pathname === '/' ? 'page' : undefined}>
+			<li aria-current={page.url.pathname === '/' ?
+'page' : undefined}>
 				<a href="/">Home</a>
+			</li>
+			<li aria-current={page.url.pathname === '/dashboard' ?
+'page' : undefined}>
+				<a href="/dashboard">Dashboard</a>
 			</li>
 			<li aria-current={page.url.pathname === '/about' ? 'page' : undefined}>
 				<a href="/about">About</a>
@@ -38,7 +43,7 @@
 <style>
 	header {
 		display: flex;
-		justify-content: space-between;
+justify-content: space-between;
 	}
 
 	.corner {
@@ -52,7 +57,7 @@
 		justify-content: center;
 		width: 100%;
 		height: 100%;
-	}
+}
 
 	.corner img {
 		width: 2em;
@@ -64,7 +69,7 @@
 		display: flex;
 		justify-content: center;
 		--background: rgba(255, 255, 255, 0.7);
-	}
+}
 
 	svg {
 		width: 2em;
@@ -81,7 +86,7 @@
 		padding: 0;
 		margin: 0;
 		height: 3em;
-		display: flex;
+display: flex;
 		justify-content: center;
 		align-items: center;
 		list-style: none;
@@ -96,14 +101,14 @@
 
 	li[aria-current='page']::before {
 		--size: 6px;
-		content: '';
+content: '';
 		width: 0;
 		height: 0;
 		position: absolute;
 		top: 0;
 		left: calc(50% - var(--size));
 		border: var(--size) solid transparent;
-		border-top: var(--size) solid var(--color-theme-1);
+border-top: var(--size) solid var(--color-theme-1);
 	}
 
 	nav a {
@@ -113,7 +118,7 @@
 		padding: 0 0.5rem;
 		color: var(--color-text);
 		font-weight: 700;
-		font-size: 0.8rem;
+font-size: 0.8rem;
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
 		text-decoration: none;
