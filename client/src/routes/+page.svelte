@@ -31,8 +31,8 @@
       <a href="#testimonios">Testimonios</a>
     </nav>
     <div class="auth-buttons">
-      <button class="btn-secondary">Iniciar Sesión</button>
-      <button class="btn-primary">Registrarse Gratis</button>
+      <a href="/login" class="btn-secondary">Iniciar Sesión</a>
+      <a href="/register" class="btn-primary">Registrarse Gratis</a>
     </div>
   </header>
 
@@ -43,7 +43,7 @@
         <h1>Convierte la Educación en una Aventura</h1>
         <p>Crea material didáctico que tus estudiantes con NEE amarán. Usa plantillas pedagógicas y la magia de sus personajes favoritos en minutos.</p>
         <div class="hero-buttons">
-          <button class="btn-primary large">Empieza a Crear Ahora →</button>
+          <a href="/register" class="btn-primary large">Empieza a Crear Ahora →</a>
         </div>
         <div class="social-proof">
           <p>Usado por <strong>cientos de docentes</strong> en Venezuela</p>
@@ -132,7 +132,7 @@
         <div class="cta-content">
             <h2>Crea tus Actividades Ya Mismo</h2>
             <p>Únete a la comunidad de educadores que están transformando el aprendizaje.</p>
-            <button class="btn-primary large cta-button">Empezar Gratis →</button>
+            <a href="/register" class="btn-primary large cta-button">Empezar Gratis →</a>
         </div>
     </section>
   </main>
@@ -188,14 +188,6 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
 .logo svg { color: var(--primary-color); margin-right: 0.5rem; }
 .navigation { display: none; }
 .auth-buttons { display: flex; gap: 0.75rem; }
-
-/* BUTTONS */
-.btn-primary, .btn-secondary { border-radius: 50px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; border: 2px solid transparent; padding: 0.7rem 1.5rem; font-size: 0.9rem; box-shadow: 0 4px 15px rgba(160, 132, 232, 0.1); }
-.btn-primary { background: linear-gradient(45deg, var(--primary-color), var(--primary-hover)); color: var(--text-on-primary); }
-.btn-primary:hover { transform: translateY(-3px); box-shadow: 0 7px 20px rgba(160, 132, 232, 0.3); }
-.btn-secondary { background-color: var(--bg-card); color: var(--primary-color); border-color: var(--primary-color); }
-.btn-secondary:hover { background-color: var(--primary-color); color: var(--bg-card); }
-.btn-primary.large { padding: 0.9rem 2.2rem; font-size: 1rem; }
 
 /* HERO SECTION */
 .hero { padding: 4rem 1.5rem 6rem 1.5rem; }
@@ -257,10 +249,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
 .footer-bottom { border-top: 1px solid var(--border-color); margin-top: 3rem; padding-top: 2rem; text-align: center; color: var(--text-light); font-size: 0.9rem; }
 
 /* RESPONSIVE */
-@media (min-width: 576px) {
-    .footer-grid { grid-template-columns: 2fr 1fr; }
-}
-
+@media (min-width: 576px) { .footer-grid { grid-template-columns: 2fr 1fr; } }
 @media (min-width: 768px) {
     .navigation { display: flex; gap: 1.5rem; }
     .navigation a { color: var(--text-light); text-decoration: none; font-weight: 600; transition: color 0.3s ease; }
@@ -273,10 +262,16 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
     .testimonial-card blockquote { font-size: 1.25rem; }
     .footer-grid { grid-template-columns: 2fr 1fr 1fr 1fr; }
 }
-
 @media (min-width: 992px) {
     .hero { display: flex; flex-direction: row; align-items: center; text-align: left; gap: 4rem; }
     .hero-content { flex: 1 1 55%; margin: 0; }
     .hero-image-container { flex: 1 1 45%; }
+}
+@media (max-width: 767px) {
+  .header { flex-direction: column; gap: 1rem; }
+  .auth-buttons { margin-top: 1rem; }
+  .features-grid, .steps-container { grid-template-columns: 1fr; flex-direction: column; }
+  .step-arrow { transform: rotate(90deg); margin: 1rem 0; }
+  .footer-grid { grid-template-columns: 1fr; }
 }
 </style>
