@@ -1,7 +1,7 @@
 import { Elysia, t } from 'elysia';
 import { cors } from '@elysiajs/cors';
 import { jwt } from '@elysiajs/jwt';
-import { env } from 'elysia-env'; // <-- 1. IMPORTAMOS elysia-env
+import { env } from '@yolk-oss/elysia-env';
 import postgres from 'postgres';
 import { z } from 'zod';
 import 'dotenv/config';
@@ -15,8 +15,8 @@ const app = new Elysia()
   .use(cors())
   .use(jwt({
     name: 'jwt',
-    // Ahora 'secret' es accesible a través de 'app.env'
-    secret: (app) => app.env.JWT_SECRET,
+    // PASAMOS LA CLAVE SECRETA DIRECTAMENTE
+    secret: process.env.JWT_SECRET,
   }))
   
   // El resto del código permanece igual...
@@ -33,7 +33,7 @@ const app = new Elysia()
         const { name, email, password } = validation.data;
 
         try {
-          const sql = postgres('postgres://postgres:tu_contraseña@localhost:5432/dua_conecta_db');
+          const sql = postgres('postgres://postgres:1234@localhost:5432/dua_conecta_db');
           const hashedPassword = await Bun.password.hash(password);
           await sql`
             INSERT INTO users (name, email, password_hash)
@@ -44,12 +44,12 @@ const app = new Elysia()
           return { success: true, message: '¡Usuario registrado exitosamente!' };
 
         } catch (error) {
-          const sql = postgres();
-          if (error instanceof sql.PostgresError && error.code === '23505') {
+          console.error("Error en el registro:", error);
+          if (error.code === '23505') {
             set.status = 409;
             return { error: 'El correo electrónico ya está en uso.' };
           }
-          console.error("Error en el registro:", error);
+          
           set.status = 500;
           return { error: 'Ocurrió un error en el servidor.' };
         }
@@ -66,7 +66,7 @@ const app = new Elysia()
         const { email, password } = validation.data;
 
         try {
-            const sql = postgres('postgres://postgres:tu_contraseña@localhost:5432/dua_conecta_db');
+            const sql = postgres('postgres://postgres:1234@localhost:5432/dua_conecta_db');
             const users = await sql`
                 SELECT id, name, password_hash FROM users WHERE email = ${email}
             `;
