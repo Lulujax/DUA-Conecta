@@ -1,5 +1,4 @@
 <script lang="ts">
-    // Datos de marcador de posición para las plantillas
     const templates = [
         { id: 1, title: 'Contando con Superhéroes', category: 'Matemáticas' },
         { id: 2, title: 'Laberinto de Letras', category: 'Lectoescritura' },

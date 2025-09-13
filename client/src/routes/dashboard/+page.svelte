@@ -1,46 +1,21 @@
 <script lang="ts">
-    import { goto } from '$app/navigation';
     import { user } from '$lib/stores/auth';
 
     let userName = '';
     // Nos suscribimos al store para obtener el nombre del usuario
     user.subscribe(value => {
-        if (value) {
+        if (value && value.name) {
             // Tomamos solo el primer nombre para el saludo
             userName = value.name.split(' ')[0];
         }
     });
-
-    function logout() {
-        // Limpiamos el store, lo que también borra de localStorage
-        user.set(null);
-        // Redirigimos a la página de inicio
-        goto('/');
-    }
 </script>
 
 <svelte:head>
     <title>Panel de Control - DUA-Conecta</title>
 </svelte:head>
 
-<div class="page-wrapper">
-  <header class="header">
-    <div class="logo">
-        <a href="/" style="display: flex; align-items: center; text-decoration: none; color: var(--text-dark);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shapes"><path d="M8.3 10a.7.7 0 0 1-.7.7 1.6 1.6 0 0 0-1.6 1.6.7.7 0 0 1-.7.7H4a.7.7 0 0 1-.7-.7 3 3 0 0 1 3-3 .7.7 0 0 1 .7.7Z"/><path d="M20.7 10a.7.7 0 0 1 .7.7 3 3 0 0 1-3 3 .7.7 0 0 1-.7-.7V12a.7.7 0 0 1 .7-.7 1.6 1.6 0 0 0 1.6-1.6.7.7 0 0 1 .7-.7Z"/><path d="M12.7 4a.7.7 0 0 1 .7.7 1.6 1.6 0 0 0 1.6 1.6.7.7 0 0 1 .7.7v1.4a.7.7 0 0 1-.7.7 3 3 0 0 1-3-3 .7.7 0 0 1 .7-.7Z"/><path d="m12 12-1.4 1.4a3 3 0 0 1-4.2 0 3 3 0 0 1 0-4.2L12 12Z"/></svg>
-            <span style="margin-left: 0.5rem;">DUA-Conecta</span>
-        </a>
-    </div>
-    <nav class="navigation">
-      <a href="/dashboard/plantillas">Explorar Plantillas</a>
-      <a href="/dashboard/perfil">Mi Perfil</a>
-    </nav>
-    <div class="auth-buttons">
-      <button on:click={logout} class="btn-secondary">Cerrar Sesión</button>
-    </div>
-  </header>
-
-  <main class="dashboard-main">
+<main>
     <div class="dashboard-header">
         <h1>¡Hola, {userName}!</h1>
         <p class="subtitle">¿Qué te gustaría hacer hoy?</p>
@@ -63,8 +38,7 @@
             <p>Actualiza tu nombre o cambia tu contraseña de forma segura.</p>
         </a>
     </div>
-  </main>
-</div>
+</main>
 
 <style>
     main {
@@ -122,17 +96,7 @@
         margin: 0;
     }
     
-    /* Estilos para el header del dashboard */
-    .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; max-width: 1100px; margin: 0 auto; position: sticky; top: 0; z-index: 1000; }
-    .header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--header-bg); backdrop-filter: blur(10px); z-index: -1; border-bottom: 1px solid var(--border-color); }
-    .logo { display: flex; align-items: center; font-weight: 600; font-size: 1.25rem; }
-    .navigation { display: none; }
-    .auth-buttons { display: flex; gap: 0.75rem; }
-    
     @media (min-width: 768px) {
-        .navigation { display: flex; gap: 1.5rem; }
-        .navigation a { color: var(--text-light); text-decoration: none; font-weight: 600; transition: color 0.3s ease; }
-        .navigation a:hover { color: var(--primary-color); }
         .dashboard-grid {
             grid-template-columns: repeat(3, 1fr);
         }
