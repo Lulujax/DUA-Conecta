@@ -202,7 +202,6 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
 .hero-image { width: 100%; max-width: 450px; border-radius: 24px; padding: 8px; background: var(--bg-card); box-shadow: 0 25px 50px -12px rgba(160, 132, 232, 0.15); }
 
 /* GENERAL SECTIONS */
-.section { padding: 6rem 0; }
 .section-header { text-align: center; max-width: 700px; margin: 0 auto 4rem auto; }
 .section-title { font-size: 2.5rem; font-weight: 700; color: var(--text-dark); margin: 0.5rem 0; }
 .section-subtitle { font-size: 1.1rem; color: var(--text-light); line-height: 1.7; }
@@ -236,6 +235,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
 .cta-section { background: var(--bg-section); color: var(--text-dark); padding: 6rem 1.5rem; text-align: center; }
 .cta-content h2 { font-size: 2.5rem; font-weight: 800; margin: 0 0 1rem 0; }
 .cta-content p { font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 0 auto 2rem auto; color: var(--text-light); }
+.cta-button { background: var(--primary-color); color: var(--text-on-primary); }
+.cta-button:hover { background: var(--primary-hover); }
 
 /* FOOTER */
 .main-footer { background-color: var(--text-dark); color: var(--text-light); padding: 4rem 1.5rem 2rem 1.5rem; }

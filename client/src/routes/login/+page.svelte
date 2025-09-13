@@ -1,6 +1,6 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
-    import { user } from '$lib/stores/auth'; // <-- 1. Importamos nuestro store
+    import { user } from '$lib/stores/auth';
 
     let isLoading = false;
     let passwordFieldType = 'password';
@@ -28,9 +28,11 @@
                 throw new Error(result.error || 'Ocurrió un error al iniciar sesión.');
             }
 
-            // <-- 2. Si el login es exitoso, guardamos el token y los datos en el store
+            // <-- CAMBIO CLAVE: Guardamos el token y los datos del usuario
             user.set({
-                token: result.token
+                token: result.token,
+                name: result.user.name,
+                email: result.user.email
             });
 
             await goto('/dashboard');
@@ -46,17 +48,14 @@
 <svelte:head>
     <title>Iniciar Sesión - DUA-Conecta</title>
 </svelte:head>
-
 <div class="auth-wrapper">
     <div class="auth-card">
         <a href="/" class="back-link">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
             <span>Volver al Inicio</span>
         </a>
-        
         <h2>Bienvenido de Nuevo</h2>
         <p class="subtitle">Inicia sesión para continuar creando magia.</p>
-        
         <form on:submit|preventDefault={handleSubmit}>
             <div class="form-group">
                 <label for="email">Correo Electrónico</label>
@@ -94,9 +93,6 @@
         </div>
     </div>
 </div>
-
 <style>
-    .auth-card {
-        position: relative;
-    }
+    .auth-card { position: relative; }
 </style>
