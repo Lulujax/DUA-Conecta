@@ -1,13 +1,22 @@
 <script lang="ts">
-    import { goto } from '$app/navigation';
+    // Ya no necesitamos 'goto' aquí para el logout
     import { user } from '$lib/stores/auth';
+    import { browser } from '$app/environment';
 
     /** @type {{children: import('svelte').Snippet}} */
     let { children } = $props();
 
     function logout() {
+        // Primero, borramos la sesión del usuario
         user.set(null);
-        goto('/');
+        
+        // --- CORRECCIÓN CLAVE ---
+        // En lugar de usar el navegador interno de SvelteKit (goto),
+        // forzamos una recarga completa del navegador hacia la página de inicio.
+        // Esto rompe el ciclo de reactividad y asegura que siempre llegues al home público.
+        if (browser) {
+            window.location.href = '/';
+        }
     }
 </script>
 
@@ -38,7 +47,7 @@
     .navigation { display: none; }
     
     @media (min-width: 768px) {
-        .navigation { display: flex; gap: 2rem; } /* Aumenté el gap para más espacio */
+        .navigation { display: flex; gap: 2rem; }
         .navigation a { color: var(--text-light); text-decoration: none; font-weight: 600; transition: color 0.3s ease; }
         .navigation a:hover { color: var(--primary-color); }
     }

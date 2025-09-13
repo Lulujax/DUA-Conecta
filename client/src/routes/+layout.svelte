@@ -1,7 +1,11 @@
 <script>
+  import '../app.css';
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
-  import '../app.css';
+  import { browser } from '$app/environment';
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
+  import { user } from '$lib/stores/auth';
 
   /** @type {{children: import('svelte').Snippet}} */
   let { children } = $props();
@@ -19,11 +23,26 @@
     }
 
     theme.subscribe(value => {
-      if (typeof window !== 'undefined' && value) {
+      if (browser && value) {
         document.documentElement.setAttribute('data-theme', value);
         localStorage.setItem('theme', value);
       }
     });
+  });
+
+  // --- LÓGICA DE PROTECCIÓN CORREGIDA ---
+  // Ahora solo protege las rutas del dashboard, no redirige desde el home.
+  $effect(() => {
+    if (browser) {
+      const { pathname } = $page.url;
+      const currentUser = $user;
+
+      // Si el usuario NO está logueado Y trata de acceder a una ruta protegida...
+      if (!currentUser && pathname.startsWith('/dashboard')) {
+        // ...lo enviamos al login.
+        goto('/login');
+      }
+    }
   });
 
   function toggleTheme() {
@@ -47,35 +66,22 @@
     background: var(--bg-main);
     transition: background-color 0.3s ease;
   }
-
   .theme-toggle {
-    position: fixed;
-    top: 1rem;
-    right: 1.5rem;
-    z-index: 1001;
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 50%;
-    width: 44px;
-    height: 44px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    transition: all 0.3s ease;
+    position: fixed; top: 1rem; right: 1.5rem; z-index: 1001;
+    background-color: var(--bg-card); border: 1px solid var(--border-color);
+    border-radius: 50%; width: 44px; height: 44px; display: flex;
+    justify-content: center; align-items: center; cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1); transition: all 0.3s ease;
   }
   .theme-toggle:hover {
     transform: scale(1.1) rotate(15deg);
     border-color: var(--primary-color);
   }
   .theme-toggle svg {
-    width: 22px;
-    height: 22px;
-    color: var(--text-light);
-    transition: color 0.3s ease;
+    width: 22px; height: 22px; color: var(--text-light); transition: color 0.3s ease;
   }
    .theme-toggle:hover svg {
     color: var(--primary-color);
   }
 </style>
+
