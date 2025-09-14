@@ -75,7 +75,7 @@
                 </div>
             </div>
             <div class="forgot-password-link">
-                <a href="#_">¿Olvidaste tu contraseña?</a>
+                <a href="/forgot-password">¿Olvidaste tu contraseña?</a>
             </div>
             {#if formError}
                 <p class="error-message">{formError}</p>
