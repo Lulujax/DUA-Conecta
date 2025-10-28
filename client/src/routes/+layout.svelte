@@ -1,5 +1,5 @@
 <script>
-  import '../app.css'; // Importación de estilos globales
+  import '../app.css'; // <-- Importación de estilos globales
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import { browser } from '$app/environment';
@@ -10,8 +10,8 @@
   /** @type {{children: import('svelte').Snippet}} */
   let { children } = $props();
 
-  // --- CORRECCIÓN CLAVE: Se eliminó la anotación de tipo <string | null> ---
-  // Svelte infiere el tipo correctamente a partir del valor inicial 'null'.
+  // --- CORRECCIÓN: Se eliminó la anotación de tipo <string | null> ---
+  // Svelte infiere el tipo (string | null) correctamente a partir del valor inicial.
   const theme = writable(null);
 
   onMount(() => {
@@ -85,4 +85,3 @@
     color: var(--primary-color);
   }
 </style>
-

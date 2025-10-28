@@ -1,12 +1,5 @@
 <script lang="ts">
-    const templates = [
-        { id: 1, title: 'Contando con Superhéroes', category: 'Matemáticas' },
-        { id: 2, title: 'Laberinto de Letras', category: 'Lectoescritura' },
-        { id: 3, title: 'Bingo de Emociones', category: 'Habilidades Sociales' },
-        { id: 4, title: 'Trazos Mágicos', category: 'Motricidad Fina' },
-        { id: 5, title: 'Sumas Divertidas', category: 'Matemáticas' },
-        { id: 6, title: 'Mi Nombre Es...', category: 'Lectoescritura' },
-    ];
+    // Ya no necesitamos la lista de plantillas falsas aquí.
 </script>
 
 <svelte:head>
@@ -33,17 +26,17 @@
   </div>
 
   <div class="template-grid">
-      {#each templates as template}
-          <a href="/editor/{template.id}" class="template-card">
-              <div class="thumbnail">
-                  <span>(Aquí irá la miniatura)</span>
-              </div>
-              <div class="card-content">
-                  <h4>{template.title}</h4>
-                  <p>{template.category}</p>
-              </div>
-          </a>
-      {/each}
+      <!-- Mostramos solo la tarjeta de nuestra plantilla real -->
+      <a href="/editor/1" class="template-card">
+          <div class="thumbnail">
+              <span>(Miniatura Monstruo Emociones)</span>
+          </div>
+          <div class="card-content">
+              <h4>El Monstruo de las Emociones</h4>
+              <p>Habilidades Sociales</p>
+          </div>
+      </a>
+      <!-- En el futuro, aquí iteraremos sobre las plantillas que vengan del backend -->
   </div>
 </main>
 
@@ -54,3 +47,5 @@
         padding: 4rem 1.5rem;
     }
 </style>
+
+

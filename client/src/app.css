@@ -273,3 +273,89 @@ body {
   max-width: 450px;
   margin: 0 auto 2rem auto;
 }
+
+/* ... (conserva todo el código que ya tienes arriba) ... */
+
+/* ======================== */
+/* ESTILOS PARA EL EDITOR TIPO CANVAS */
+/* ======================== */
+.editor-layout {
+  display: flex;
+  height: calc(100vh - 60px); /* 60px es la altura del header del dashboard */
+  overflow: hidden;
+}
+.editor-sidebar {
+  width: 280px;
+  background-color: var(--bg-card);
+  border-right: 1px solid var(--border-color);
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.tool-section {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.tool-section h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0 0 1rem 0;
+}
+.tool-section button, .btn-upload {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+.tool-section input[type="file"] { display: none; }
+.tool-section input[type="color"] {
+  width: 100%;
+  height: 40px;
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+.tool-section input[type="range"] { width: 100%; }
+.prop-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-light);
+  margin-top: 1rem;
+  display: block;
+}
+.font-size-input {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-section);
+  color: var(--text-dark);
+}
+
+.editor-canvas-area {
+  flex-grow: 1;
+  background-color: var(--bg-section);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start; /* Alinea arriba */
+  padding: 2rem;
+  overflow: auto;
+}
+.canvas-container {
+  position: relative;
+  width: 700px;
+  height: 900px;
+  background-color: white;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+.actions {
+  margin-top: auto;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+.actions button:first-child {
+  margin-bottom: 0.75rem;
+}
