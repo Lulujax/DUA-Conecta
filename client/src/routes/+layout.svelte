@@ -1,5 +1,5 @@
 <script>
-  import '../app.css';
+  import '../app.css'; // Importación de estilos globales
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import { browser } from '$app/environment';
@@ -10,6 +10,8 @@
   /** @type {{children: import('svelte').Snippet}} */
   let { children } = $props();
 
+  // --- CORRECCIÓN CLAVE: Se eliminó la anotación de tipo <string | null> ---
+  // Svelte infiere el tipo correctamente a partir del valor inicial 'null'.
   const theme = writable(null);
 
   onMount(() => {
@@ -22,24 +24,23 @@
       theme.set(systemPrefersDark ? 'dark' : 'light');
     }
 
-    theme.subscribe(value => {
-      if (browser && value) {
+    const unsubscribe = theme.subscribe(value => {
+      // Nos aseguramos de que 'value' no sea null antes de actuar
+      if (browser && value) { 
         document.documentElement.setAttribute('data-theme', value);
         localStorage.setItem('theme', value);
       }
     });
+
+    return () => unsubscribe(); 
   });
 
-  // --- LÓGICA DE PROTECCIÓN CORREGIDA ---
-  // Ahora solo protege las rutas del dashboard, no redirige desde el home.
   $effect(() => {
     if (browser) {
       const { pathname } = $page.url;
       const currentUser = $user;
 
-      // Si el usuario NO está logueado Y trata de acceder a una ruta protegida...
       if (!currentUser && pathname.startsWith('/dashboard')) {
-        // ...lo enviamos al login.
         goto('/login');
       }
     }

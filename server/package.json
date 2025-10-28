@@ -6,12 +6,12 @@
     "dev": "bun run --watch index.ts"
   },
   "dependencies": {
-    "@elysiajs/cors": "^1.0.2",
-    "@elysiajs/jwt": "^1.0.2",
-    "elysia": "^1.0.13",
-    "postgres": "^3.4.4",
-    "resend": "^3.2.0",
-    "zod": "^3.23.8"
+    "@elysiajs/cors": "latest",
+    "@elysiajs/jwt": "latest",
+    "elysia": "latest",
+    "postgres": "^3.4.4",  
+    "resend": "^3.2.0",    
+    "zod": "^3.23.8"      
   },
   "devDependencies": {
     "bun-types": "latest"
