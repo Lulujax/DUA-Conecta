@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { BROWSER } from '$app/environment';
+	import { browser } from '$app/environment';
 
 	// --- PROPS ---
 	let {
