@@ -4,12 +4,35 @@
 	import Draggable from '$lib/editor/Draggable.svelte';
 	import { browser } from '$app/environment';
 	import { tick } from 'svelte';
+	
 	// --- IMPORTS ADICIONALES ---
 	import html2canvas from 'html2canvas';
 	import { jsPDF } from 'jspdf';
-	import { user } from '$lib/stores/auth'; // Importamos el store de usuario para el token
+	import { user } from '$lib/stores/auth'; // NECESARIO para obtener el token del usuario
 
 	const templateId = $page.params.templateId;
+    
+    // 1. Lógica para capturar activityId de la URL en el cliente
+    let initialActivityId: number | null = null;
+    let initialActivityName: string | null = 'Plantilla sin nombre';
+
+    if (browser) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const activityIdParam = urlParams.get('activityId');
+        // El nombre es pasado desde "Mis Actividades"
+        const activityNameParam = urlParams.get('name'); 
+
+        if (activityIdParam) {
+            initialActivityId = parseInt(activityIdParam);
+            if (activityNameParam) {
+                initialActivityName = activityNameParam;
+            }
+        }
+    }
+
+	let currentActivityId = $state<number | null>(initialActivityId); // ID para saber si es UPDATE
+    let activityName = $state<string>(initialActivityName); // Nombre visible
+    
 	let selectedElementId = $state<number | null>(null);
 
 	// --- NUEVA REFERENCIA: Contenedor del Canvas ---
@@ -26,8 +49,9 @@
 
 	// --- FUENTES DISPONIBLES ---
 	const availableFonts = ['Arial', 'Verdana', 'Times New Roman', 'Courier New', 'Georgia', 'Comic Sans MS'];
-	// --- PLANTILLA BASE ---
-	let initialElements: Array<any> = [
+	
+    // --- PLANTILLA BASE (Solo se usa si no hay actividad para cargar) ---
+	const BASE_ELEMENTS: Array<any> = [
 		{ id: 1, type: 'text', content: 'Nombre:', x: 50, y: 40, width: 60, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false},
 		{ id: 101, type: 'text', content: '_____________________', x: 115, y: 40, width: 180, height: 20, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false},
 		{ id: 2, type: 'text', content: 'Fecha:', x: 350, y: 40, width: 50, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false },
@@ -47,12 +71,59 @@
 		{ id: 113, type: 'text', content: '___________', x: 550, y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false}
 	];
 
+
 	// --- LÓGICA DE HISTORIAL ---
-	let history: Array<string> = $state(['[{"id":-1}]']);
+	let elements = $state(structuredClone(BASE_ELEMENTS));
+	let history: Array<string> = $state([JSON.stringify(elements)]);
 	let historyIndex = $state(0);
 	let applyingHistory = $state(false);
-	let elements = $state(structuredClone(initialElements));
 	let nextZIndex = $state(elements.length + 1);
+    
+    // 2. Efecto de carga
+    $effect(() => {
+        if (currentActivityId && browser) {
+            loadActivity(currentActivityId);
+        }
+    });
+
+    async function loadActivity(id: number) {
+        const currentUser = $user;
+        if (!currentUser || !currentUser.token) {
+            alert("No autenticado. Imposible cargar actividad.");
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:3000/api/activities/${id}`, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${currentUser.token}` }
+            });
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Error al cargar la actividad.');
+            }
+
+            // Establecer el estado con el contenido cargado
+            elements = result.activity.elements;
+            activityName = result.activity.name; // Cargar el nombre
+            currentActivityId = id; // Aseguramos el ID para futuras actualizaciones
+
+            // Limpiar historial e iniciar con el estado cargado
+            const currentStateString = JSON.stringify(elements);
+            history = [currentStateString];
+            historyIndex = 0;
+            hasUnsavedChanges = false;
+            
+        } catch (error) {
+            console.error('Fallo al cargar la actividad:', error);
+            alert('Error al cargar la actividad guardada. Se ha cargado la plantilla base.');
+            // Si falla la carga, volvemos a la plantilla base
+            elements = structuredClone(BASE_ELEMENTS);
+            currentActivityId = null;
+        }
+    }
+
 	function saveStateToHistory() {
 		if (applyingHistory) return;
 		const currentStateString = JSON.stringify(elements);
@@ -67,8 +138,8 @@
 	async function loadStateFromHistory(index: number) {
 		if (index < 0 || index >= history.length) return;
 		applyingHistory = true;
+		elements = JSON.parse(history[index]);
 		historyIndex = index;
-		elements = JSON.parse(history[historyIndex]);
 		selectedElementId = null;
 		hasUnsavedChanges = true;
 		await tick();
@@ -83,7 +154,8 @@
 	let selectedElement = $derived(elements.find((el) => el.id === selectedElementId) || null);
 	let hasUnsavedChanges = $state(false);
 
-	// --- LÓGICA DE ESTADO ---
+	// --- LÓGICA DE ESTADO (CORREGIDA) ---
+    // Usar .map() es crucial para asegurar la reactividad de Svelte 5 con $state
 	function updateElement(id: number, data: any, isFinalChange: boolean = true) {
 		const index = elements.findIndex((el) => el.id === id);
 		if (index !== -1) {
@@ -96,15 +168,23 @@
 			}
 
 			const currentZ = elements[index].z;
-			elements[index] = { ...elements[index], ...data, z: data.z ?? currentZ };
+			// Usamos .map() para asegurar que la asignación a 'elements' cause un re-render
+			elements = elements.map((el, i) => i === index ? { ...el, ...data, z: data.z ?? currentZ } : el);
 
 			if (isFinalChange) { saveStateToHistory(); }
 			if (!applyingHistory) hasUnsavedChanges = true;
 		}
 	}
-	function selectElement(id: number, e: MouseEvent | KeyboardEvent) { e.stopPropagation(); selectedElementId = id;
-	const index = elements.findIndex((el) => el.id === id);
-	if (index !== -1) elements[index].z = nextZIndex++; }
+    // Aseguramos la reactividad en el select también
+	function selectElement(id: number, e: MouseEvent | KeyboardEvent) { 
+        e.stopPropagation(); 
+        selectedElementId = id;
+        const index = elements.findIndex((el) => el.id === id);
+        if (index !== -1) {
+            const updatedElement = { ...elements[index], z: nextZIndex++ };
+            elements = elements.map((el, i) => i === index ? updatedElement : el);
+        }
+    }
 	function deselect(e: MouseEvent) { const target = e.target as HTMLElement;
 	if (target.classList.contains('canvas-container') || target.classList.contains('editor-canvas-area')) selectedElementId = null; }
 
@@ -132,8 +212,6 @@
 	selectedElementId = elements[elements.length - 1].id; saveStateToHistory(); }
 	function deleteSelected() { if(selectedElementId === null) return; elements = elements.filter((el) => el.id !== selectedElementId);
 	selectedElementId = null; saveStateToHistory(); }
-
-	// --- NEW: SHAPES (arrow, line, circle) ---
 	function addShape(type: 'arrow' | 'line' | 'circle') {
 		const id = Date.now();
 		let shapeDefaults: any = {
@@ -155,75 +233,92 @@
 		saveStateToHistory();
 	}
 
-	// --- Acciones de Guardado/Descarga ---
 
-	// IMPLEMENTACIÓN ACTUALIZADA DE GUARDAR
-	function saveChanges() {
-        // 1. Pedir nombre al usuario
-        const activityName = prompt("Ingresa un nombre para guardar tu actividad:");
-        
-        if (!activityName || activityName.trim() === "") {
-            alert("El guardado fue cancelado. Debes proporcionar un nombre.");
-            return;
-        }
-
+	// --- Acciones de Guardado/Descarga (REFACTORIZADO) ---
+	async function saveChanges() {
         const currentUser = $user;
         if (!currentUser || !currentUser.token) {
             alert("No estás autenticado. Por favor, inicia sesión.");
             return;
         }
+        
+        let targetUrl: string;
+        let method: 'POST' | 'PUT';
+        let nameToSave = activityName.trim();
+
+        if (currentActivityId) {
+            // Caso 1: Actualizar actividad existente (No pide nombre)
+            targetUrl = `http://localhost:3000/api/activities/${currentActivityId}`;
+            method = 'PUT';
+        } else {
+            // Caso 2: Crear nueva actividad (Pide nombre)
+            const inputName = prompt("Ingresa un nombre para guardar tu nueva actividad:", activityName);
+            
+            if (!inputName || inputName.trim() === "") {
+                alert("El guardado fue cancelado. Debes proporcionar un nombre.");
+                return;
+            }
+            nameToSave = inputName.trim();
+            targetUrl = 'http://localhost:3000/api/activities/save';
+            method = 'POST';
+        }
 
         const payload = {
-            name: activityName.trim(),
+            name: nameToSave,
             templateId: templateId,
-            elements: elements,
+            elements: elements, // Contiene los elementos con los cambios
         };
 
-        // 2. Realizar la llamada a la API protegida
-        fetch('http://localhost:3000/api/activities/save', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentUser.token}`
-            },
-            body: JSON.stringify(payload),
-        })
-        .then(response => response.json().then(data => ({ status: response.status, body: data })))
-        .then(({ status, body }) => {
-            if (status >= 200 && status < 300) {
-                // Guardado exitoso: reseteamos el estado de cambios sin guardar
-                hasUnsavedChanges = false; 
-                history = [JSON.stringify(elements)];
-                historyIndex = 0;
-                alert(body.message || `¡Actividad "${activityName}" guardada con éxito!`);
-            } else {
-                // Manejo de errores de la API
-                throw new Error(body.error || 'Error desconocido al guardar la actividad.');
+        try {
+            const response = await fetch(targetUrl, {
+                method: method,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${currentUser.token}`
+                },
+                body: JSON.stringify(payload),
+            });
+            
+            const body = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(body.error || `Error ${method === 'PUT' ? 'al actualizar' : 'al guardar'} la actividad.`);
             }
-        })
-        .catch(error => {
-            console.error('Error en el guardado:', error);
-            alert('Fallo al guardar la actividad: ' + error.message);
-        });
-	}
 
-	// IMPLEMENTACIÓN COMPLETA DE DESCARGA PDF
+            // Éxito: Establecer el activityId si fue una nueva creación
+            if (method === 'POST' && body.activityId) {
+                currentActivityId = body.activityId;
+            }
+            
+            // Actualizar el nombre de la actividad
+            activityName = nameToSave; 
+            
+            // Limpiar historial/banderas
+            hasUnsavedChanges = false; 
+            history = [JSON.stringify(elements)];
+            historyIndex = 0;
+            alert(body.message || `¡Actividad "${activityName}" guardada con éxito!`);
+            
+        } catch (error) {
+            console.error('Error en el guardado:', error);
+            alert(`Fallo al guardar/actualizar la actividad: ${(error as Error).message}`);
+        }
+	}
+    
+	// IMPLEMENTACIÓN COMPLETA DE DESCARGA PDF 
 	async function downloadPdf() {
         if (!canvasContainerRef) {
             console.error('No se encontró el contenedor del canvas.');
             alert('Error: No se encontró el área de diseño.');
             return;
         }
-
-        // 1. Limpiar la interfaz antes de capturar
         selectedElementId = null;
         verticalSnapLine = null;
         horizontalSnapLine = null;
         await tick();
 
-        // 2. Opciones de conversión para html2canvas
         const options = {
-            scale: 2, // Aumenta la resolución para mejor calidad
+            scale: 2, 
             useCORS: true, 
             backgroundColor: '#FFFFFF', 
             scrollY: -window.scrollY, 
@@ -233,18 +328,15 @@
         };
 
         try {
-            // 3. Convertir el div a canvas (imagen)
             const canvas = await html2canvas(canvasContainerRef, options);
             const imgData = canvas.toDataURL('image/jpeg', 1.0); 
 
-            // 4. Configurar jsPDF (A4)
             const pdf = new jsPDF('p', 'px', 'a4'); 
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const imgHeight = (canvas.height * pdfWidth) / canvas.width;
             
-            // 5. Añadir imagen y descargar
             pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-            pdf.save('DUA-Conecta_Actividad_' + templateId + '.pdf');
+            pdf.save(`DUA-Conecta_Actividad_${activityName.replace(/\s/g, '_')}.pdf`);
 
             alert('¡PDF generado con éxito!');
 
@@ -294,7 +386,7 @@
 	</script>
 
 <svelte:head>
-	<title>Editor - {templateId} - DUA-Conecta</title>
+	<title>Editor - {activityName} - DUA-Conecta</title>
 </svelte:head>
 
 <main class="editor-layout" onclick={deselect}>
@@ -352,7 +444,13 @@
 		{/if}
 		<div class="tool-section actions">
 			<h3>Acciones</h3>
-			<button class="btn-secondary" onclick={saveChanges} disabled={!hasUnsavedChanges}>{#if hasUnsavedChanges}Guardar{:else}Guardado ✓{/if}</button>
+			<button class="btn-secondary" onclick={saveChanges} disabled={!hasUnsavedChanges}>
+                {#if hasUnsavedChanges}
+                    {currentActivityId ? 'Actualizar' : 'Guardar Nueva'}
+                {:else}
+                    Guardado ✓
+                {/if}
+            </button>
 			<button class="btn-primary" onclick={downloadPdf}>Descargar PDF</button>
 		</div>
 	</aside>
@@ -381,12 +479,12 @@
 				<div class="toolbar-separator"></div>
 
 				<button class="icon-button" onclick={(e) => { e.preventDefault(); e.stopPropagation(); formatList('insertUnorderedList'); }} title="Lista con viñetas"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h2v2H4zm0 6h2v2H4zm0 6h2v2H4zm4 1h14v2H8zm0-6h14v2H8zm0-6h14v2H8z"></path></svg></button>
-				<button class="icon-button" onclick={(e) => { e.preventDefault(); e.stopPropagation(); formatList('insertOrderedList'); }} title="Lista numerada"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 11.9V11H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"></path></svg></button>
+				<button class="icon-button" class:active={false} onclick={(e) => { e.preventDefault(); e.stopPropagation(); formatList('insertOrderedList'); }} title="Lista numerada"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 11.9V11H2v1zm5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z"></path></svg></button>
 				<div class="toolbar-separator"></div>
-				<button class="icon-button" class:active={selectedElement.textAlign === 'left'} onclick={() => changeTextAlign('left')} title="Alinear Izquierda"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M15 15H3v2h12v-2zm0-8H3v2h12V7zM3 13h18v-2H3v2zm0 8h18v-2H3v2zM3 3v2h18V3H3z"></path></svg></button>
-				<button class="icon-button" class:active={selectedElement.textAlign === 'center'} onclick={() => changeTextAlign('center')} title="Centrar"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z"></path></svg></button>
-				<button class="icon-button" class:active={selectedElement.textAlign === 'right'} onclick={() => changeTextAlign('right')} title="Alinear Derecha"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18v-2H3v2zm6-4h12V7H9v2zM3 3v2h18V3H3z"></path></svg></button>
-				<button class="icon-button" class:active={selectedElement.textAlign === 'justify'} onclick={() => changeTextAlign('justify')} title="Justificar"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 21h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18V7H3v2zm0-6v2h18V3H3z"></path></svg></button>
+				<button class="icon-button" class:active={selectedElement?.textAlign === 'left'} onclick={() => changeTextAlign('left')} title="Alinear Izquierda"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M15 15H3v2h12v-2zm0-8H3v2h12V7zM3 13h18v-2H3v2zm0 8h18v-2H3v2zM3 3v2h18V3H3z"></path></svg></button>
+				<button class="icon-button" class:active={selectedElement?.textAlign === 'center'} onclick={() => changeTextAlign('center')} title="Centrar"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z"></path></svg></button>
+				<button class="icon-button" class:active={selectedElement?.textAlign === 'right'} onclick={() => changeTextAlign('right')} title="Alinear Derecha"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18v-2H3v2zm6-4h12V7H9v2zM3 3v2h18V3H3z"></path></svg></button>
+				<button class="icon-button" class:active={selectedElement?.textAlign === 'justify'} onclick={() => changeTextAlign('justify')} title="Justificar"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 21h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18V7H3v2zm0-6v2h18V3H3z"></path></svg></button>
 			</div>
 		{/if}
 

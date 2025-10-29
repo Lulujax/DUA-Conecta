@@ -19,7 +19,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const app = new Elysia()
     .use(cors({ // Configuración CORS explícita y robusta
         origin: 'http://localhost:5173',
-        methods: ['GET', 'POST', 'OPTIONS'],
+        methods: ['GET', 'POST', 'PUT', 'OPTIONS'], // Añadimos 'PUT' para actualizar
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
     }))
@@ -103,7 +103,6 @@ const app = new Elysia()
                     set.status = 200; return { success: true, message: 'Si el correo existe, recibirás un enlace.' };
                 } catch (error) {
                     console.error("Error en /auth/forgot-password:", error);
-                    // No devolvemos el error específico de Resend al cliente por seguridad
                     set.status = 500; return { error: 'Error interno al procesar la solicitud.' };
                 }
             })
@@ -159,7 +158,7 @@ const app = new Elysia()
                 set.status = 500; return { error: 'Error interno del servidor.' };
             }
         })
-        // --- RUTA PARA GUARDAR ACTIVIDAD ---
+        // --- RUTA PARA CREAR/GUARDAR NUEVA ACTIVIDAD ---
         .post('/activities/save', async ({ profile, body, set }) => {
             const userId = (profile as any).userId;
             const ActivitySchema = z.object({
@@ -177,30 +176,25 @@ const app = new Elysia()
             const { name, templateId, elements } = validation.data;
             
             try {
-                // Insertamos la nueva actividad en la tabla saved_activities
-                await sql`
+                // Insertamos y retornamos el ID de la nueva actividad
+                const [newActivity] = await sql`
                     INSERT INTO saved_activities (user_id, name, template_id, elements)
                     VALUES (${userId}, ${name}, ${templateId}, ${JSON.stringify(elements)})
+                    RETURNING id
                 `;
                 
                 set.status = 201; 
-                return { success: true, message: '¡Actividad guardada con éxito!' };
+                return { success: true, message: '¡Actividad guardada con éxito!', activityId: newActivity.id };
             } catch (error) {
-                 // Manejo de error específico si la tabla no existe
-                if (error instanceof postgres.PostgresError && error.code === '42P01') {
-                    set.status = 500;
-                    return { error: 'Error: La tabla saved_activities no existe. Ejecuta el SQL de creación.' };
-                }
                 console.error("Error al guardar actividad:", error);
                 set.status = 500; 
                 return { error: 'Error interno del servidor al guardar la actividad.' };
             }
         })
-        // --- NUEVA RUTA PARA OBTENER ACTIVIDADES GUARDADAS ---
+        // --- RUTA PARA OBTENER ACTIVIDADES GUARDADAS (LISTA) ---
         .get('/activities', async ({ profile, set }) => {
             const userId = (profile as any).userId;
             try {
-                // Solo seleccionamos los campos necesarios para la lista, no el JSON completo.
                 const activities = await sql`
                     SELECT id, name, template_id, created_at, updated_at
                     FROM saved_activities
@@ -211,13 +205,68 @@ const app = new Elysia()
                 return { success: true, activities };
             } catch (error) {
                 console.error("Error al obtener actividades:", error);
-                 // Manejo de error si la tabla no existe
-                if (error instanceof postgres.PostgresError && error.code === '42P01') {
-                    set.status = 200; // Devolvemos 200 pero con array vacío
-                    return { success: true, activities: [] };
-                }
                 set.status = 500;
                 return { error: 'Error interno del servidor al obtener actividades.' };
+            }
+        })
+        // --- RUTA PARA OBTENER UNA SOLA ACTIVIDAD (PARA EDICIÓN) ---
+        .get('/activities/:id', async ({ profile, params, set }) => {
+            const userId = (profile as any).userId;
+            const activityId = parseInt(params.id);
+            if (isNaN(activityId)) { set.status = 400; return { error: 'ID de actividad inválido.' } }
+
+            try {
+                const [activity] = await sql`
+                    SELECT id, name, template_id, elements
+                    FROM saved_activities
+                    WHERE id = ${activityId} AND user_id = ${userId}
+                `;
+                
+                if (!activity) { set.status = 404; return { error: 'Actividad no encontrada o no pertenece al usuario.' } }
+
+                set.status = 200;
+                // Devolvemos el objeto activity que incluye el array 'elements' (JSONB)
+                return { success: true, activity }; 
+            } catch (error) {
+                console.error("Error al obtener actividad para edición:", error);
+                set.status = 500;
+                return { error: 'Error interno del servidor al cargar la actividad.' };
+            }
+        })
+        // --- RUTA PARA ACTUALIZAR UNA SOLA ACTIVIDAD ---
+        .put('/activities/:id', async ({ profile, params, body, set }) => {
+            const userId = (profile as any).userId;
+            const activityId = parseInt(params.id);
+            if (isNaN(activityId)) { set.status = 400; return { error: 'ID de actividad inválido.' } }
+            
+            const UpdateSchema = z.object({
+                name: z.string().min(1, "El nombre es requerido."),
+                templateId: z.string().min(1),
+                elements: z.array(z.any()), 
+            });
+            const validation = UpdateSchema.safeParse(body);
+            if (!validation.success) { set.status = 400; return { error: 'Datos de actividad inválidos.' } }
+            const { name, elements, templateId } = validation.data;
+
+            try {
+                const [updatedActivity] = await sql`
+                    UPDATE saved_activities
+                    SET name = ${name}, 
+                        elements = ${JSON.stringify(elements)},
+                        template_id = ${templateId},
+                        updated_at = NOW()
+                    WHERE id = ${activityId} AND user_id = ${userId}
+                    RETURNING id
+                `;
+
+                if (!updatedActivity) { set.status = 404; return { error: 'Actividad no encontrada para actualizar.' } }
+
+                set.status = 200;
+                return { success: true, message: 'Actividad actualizada con éxito.' };
+            } catch (error) {
+                console.error("Error al actualizar actividad:", error);
+                set.status = 500;
+                return { error: 'Error interno del servidor al actualizar la actividad.' };
             }
         })
     )
