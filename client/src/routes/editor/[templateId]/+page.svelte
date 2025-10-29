@@ -4,11 +4,18 @@
 	import Draggable from '$lib/editor/Draggable.svelte';
 	import { browser } from '$app/environment';
 	import { tick } from 'svelte';
+	// --- IMPORTS ADICIONALES ---
+	import html2canvas from 'html2canvas';
+	import { jsPDF } from 'jspdf';
+	import { user } from '$lib/stores/auth'; // Importamos el store de usuario para el token
 
 	const templateId = $page.params.templateId;
 	let selectedElementId = $state<number | null>(null);
 
-	// --- ESTADO PARA LÍNEAS DE AJUSTE ---
+	// --- NUEVA REFERENCIA: Contenedor del Canvas ---
+	let canvasContainerRef: HTMLDivElement | null = $state(null);
+
+	// --- ESTADO para LÍNEAS DE AJUSTE ---
 	let verticalSnapLine = $state<number | null>(null);
 	let horizontalSnapLine = $state<number | null>(null);
 
@@ -19,7 +26,6 @@
 
 	// --- FUENTES DISPONIBLES ---
 	const availableFonts = ['Arial', 'Verdana', 'Times New Roman', 'Courier New', 'Georgia', 'Comic Sans MS'];
-
 	// --- PLANTILLA BASE ---
 	let initialElements: Array<any> = [
 		{ id: 1, type: 'text', content: 'Nombre:', x: 50, y: 40, width: 60, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false},
@@ -47,7 +53,6 @@
 	let applyingHistory = $state(false);
 	let elements = $state(structuredClone(initialElements));
 	let nextZIndex = $state(elements.length + 1);
-
 	function saveStateToHistory() {
 		if (applyingHistory) return;
 		const currentStateString = JSON.stringify(elements);
@@ -86,7 +91,8 @@
 				const oldWidth = elements[index].width;
 				const oldHeight = elements[index].height; if (oldWidth > 0 && oldHeight > 0) data.height = data.width / (oldWidth / oldHeight);
 			} else if (elements[index].type === 'image' && data.height !== undefined && data.width === undefined) {
-				const oldWidth = elements[index].width; const oldHeight = elements[index].height; if (oldWidth > 0 && oldHeight > 0) data.width = data.height * (oldWidth / oldHeight);
+				const oldWidth = elements[index].width;
+				const oldHeight = elements[index].height; if (oldWidth > 0 && oldHeight > 0) data.width = data.height * (oldWidth / oldHeight);
 			}
 
 			const currentZ = elements[index].z;
@@ -96,23 +102,28 @@
 			if (!applyingHistory) hasUnsavedChanges = true;
 		}
 	}
-	function selectElement(id: number, e: MouseEvent | KeyboardEvent) { e.stopPropagation(); selectedElementId = id; const index = elements.findIndex((el) => el.id === id);
+	function selectElement(id: number, e: MouseEvent | KeyboardEvent) { e.stopPropagation(); selectedElementId = id;
+	const index = elements.findIndex((el) => el.id === id);
 	if (index !== -1) elements[index].z = nextZIndex++; }
 	function deselect(e: MouseEvent) { const target = e.target as HTMLElement;
 	if (target.classList.contains('canvas-container') || target.classList.contains('editor-canvas-area')) selectedElementId = null; }
 
 	// --- MANEJO DE ARCHIVOS ---
 	function handleDragOver(e: DragEvent) { e.preventDefault(); }
-	function handleDrop(e: DragEvent) { e.preventDefault(); if (e.dataTransfer?.files?.[0]) { const canvasRect = (e.currentTarget as HTMLElement).querySelector('.canvas-container')?.getBoundingClientRect(); if (!canvasRect) return;
-		const x = e.clientX - canvasRect.left; const y = e.clientY - canvasRect.top; handleFile(e.dataTransfer.files[0], x, y);
+	function handleDrop(e: DragEvent) { e.preventDefault();
+	if (e.dataTransfer?.files?.[0]) { const canvasRect = (e.currentTarget as HTMLElement).querySelector('.canvas-container')?.getBoundingClientRect(); if (!canvasRect) return;
+		const x = e.clientX - canvasRect.left;
+		const y = e.clientY - canvasRect.top; handleFile(e.dataTransfer.files[0], x, y);
 	} }
-	function handleFileInput(e: Event) { const input = e.target as HTMLInputElement; if (input.files?.[0]) handleFile(input.files[0]); input.value = ''; }
-	function handleFile(file: File, x = 50, y = 50) { if (!file.type.startsWith('image/')) { alert('Por favor, sube solo archivos de imagen.'); return; } const reader = new FileReader(); reader.onload = (e) => { const url = e.target?.result as string;
-		const img = new Image(); img.onload = () => { const aspect = img.width / img.height; const maxWidth = 150;
-		const initialWidth = Math.min(maxWidth, img.width); const initialHeight = aspect > 0 ? initialWidth / aspect : 150;
-		const finalX = Math.max(0, x - initialWidth / 2); const finalY = Math.max(0, y - initialHeight / 2);
-		elements = [...elements, { id: Date.now(), type: 'image', url, x: finalX, y: finalY, width: initialWidth, height: initialHeight, z: nextZIndex++ }];
-		saveStateToHistory(); }; img.onerror = () => { alert('Error al cargar la imagen.'); }; img.src = url; };
+	function handleFileInput(e: Event) { const input = e.target as HTMLInputElement;
+	if (input.files?.[0]) handleFile(input.files[0]); input.value = ''; }
+	function handleFile(file: File, x = 50, y = 50) { if (!file.type.startsWith('image/')) { alert('Por favor, sube solo archivos de imagen.');
+	return; } const reader = new FileReader(); reader.onload = (e) => { const url = e.target?.result as string;
+	const img = new Image(); img.onload = () => { const aspect = img.width / img.height; const maxWidth = 150;
+	const initialWidth = Math.min(maxWidth, img.width); const initialHeight = aspect > 0 ? initialWidth / aspect : 150;
+	const finalX = Math.max(0, x - initialWidth / 2); const finalY = Math.max(0, y - initialHeight / 2);
+	elements = [...elements, { id: Date.now(), type: 'image', url, x: finalX, y: finalY, width: initialWidth, height: initialHeight, z: nextZIndex++ }];
+	saveStateToHistory(); }; img.onerror = () => { alert('Error al cargar la imagen.'); }; img.src = url; };
 	reader.onerror = () => { alert('Error al leer el archivo.'); }; reader.readAsDataURL(file);
 	}
 
@@ -145,34 +156,132 @@
 	}
 
 	// --- Acciones de Guardado/Descarga ---
-	function saveChanges() { console.log('Guardando:', elements); hasUnsavedChanges = false; history = [JSON.stringify(elements)];
-	historyIndex = 0; alert('¡Plantilla guardada (simulado)!'); }
-	function downloadPdf() { console.log('Descargando PDF con:', elements); alert('Descargando PDF (simulado)...'); }
+
+	// IMPLEMENTACIÓN ACTUALIZADA DE GUARDAR
+	function saveChanges() {
+        // 1. Pedir nombre al usuario
+        const activityName = prompt("Ingresa un nombre para guardar tu actividad:");
+        
+        if (!activityName || activityName.trim() === "") {
+            alert("El guardado fue cancelado. Debes proporcionar un nombre.");
+            return;
+        }
+
+        const currentUser = $user;
+        if (!currentUser || !currentUser.token) {
+            alert("No estás autenticado. Por favor, inicia sesión.");
+            return;
+        }
+
+        const payload = {
+            name: activityName.trim(),
+            templateId: templateId,
+            elements: elements,
+        };
+
+        // 2. Realizar la llamada a la API protegida
+        fetch('http://localhost:3000/api/activities/save', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.token}`
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(response => response.json().then(data => ({ status: response.status, body: data })))
+        .then(({ status, body }) => {
+            if (status >= 200 && status < 300) {
+                // Guardado exitoso: reseteamos el estado de cambios sin guardar
+                hasUnsavedChanges = false; 
+                history = [JSON.stringify(elements)];
+                historyIndex = 0;
+                alert(body.message || `¡Actividad "${activityName}" guardada con éxito!`);
+            } else {
+                // Manejo de errores de la API
+                throw new Error(body.error || 'Error desconocido al guardar la actividad.');
+            }
+        })
+        .catch(error => {
+            console.error('Error en el guardado:', error);
+            alert('Fallo al guardar la actividad: ' + error.message);
+        });
+	}
+
+	// IMPLEMENTACIÓN COMPLETA DE DESCARGA PDF
+	async function downloadPdf() {
+        if (!canvasContainerRef) {
+            console.error('No se encontró el contenedor del canvas.');
+            alert('Error: No se encontró el área de diseño.');
+            return;
+        }
+
+        // 1. Limpiar la interfaz antes de capturar
+        selectedElementId = null;
+        verticalSnapLine = null;
+        horizontalSnapLine = null;
+        await tick();
+
+        // 2. Opciones de conversión para html2canvas
+        const options = {
+            scale: 2, // Aumenta la resolución para mejor calidad
+            useCORS: true, 
+            backgroundColor: '#FFFFFF', 
+            scrollY: -window.scrollY, 
+            scrollX: -window.scrollX,
+            windowWidth: canvasContainerRef.scrollWidth,
+            windowHeight: canvasContainerRef.scrollHeight
+        };
+
+        try {
+            // 3. Convertir el div a canvas (imagen)
+            const canvas = await html2canvas(canvasContainerRef, options);
+            const imgData = canvas.toDataURL('image/jpeg', 1.0); 
+
+            // 4. Configurar jsPDF (A4)
+            const pdf = new jsPDF('p', 'px', 'a4'); 
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+            
+            // 5. Añadir imagen y descargar
+            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+            pdf.save('DUA-Conecta_Actividad_' + templateId + '.pdf');
+
+            alert('¡PDF generado con éxito!');
+
+        } catch (error) {
+            console.error('Error al generar PDF:', error);
+            alert('Error al generar PDF. Revisa la consola.');
+        }
+    }
+
 
 	// --- Aviso antes de salir ---
 	let blockNavigation = false;
 	beforeNavigate(({ cancel }) => { if (hasUnsavedChanges && blockNavigation) { if (!confirm('Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?')) cancel(); else hasUnsavedChanges = false; } if (!hasUnsavedChanges || !cancel) blockNavigation = false; });
 	afterNavigate(() => { setTimeout(() => { blockNavigation = true; }, 0); });
-
 	// --- Funciones para herramientas de texto ---
-	function toggleStyle(styleProp: 'isBold' | 'isItalic' | 'isUnderlined') { if (selectedElement?.type === 'text' && selectedElementId !== null) updateElement(selectedElementId, { [styleProp]: !selectedElement[styleProp] }, true); }
-	function changeTextAlign(align: 'left' | 'center' | 'right' | 'justify') { if (selectedElement?.type === 'text' && selectedElementId !== null) updateElement(selectedElementId, { textAlign: align }, true); }
+	function toggleStyle(styleProp: 'isBold' | 'isItalic' | 'isUnderlined') { if (selectedElement?.type === 'text' && selectedElementId !== null) updateElement(selectedElementId, { [styleProp]: !selectedElement[styleProp] }, true);
+	}
+	function changeTextAlign(align: 'left' | 'center' | 'right' | 'justify') { if (selectedElement?.type === 'text' && selectedElementId !== null) updateElement(selectedElementId, { textAlign: align }, true);
+	}
 	function changeFontSize(delta: number) { if (selectedElement?.type === 'text' && selectedElementId !== null) { const newSize = Math.max(8, Math.min(120, selectedElement.fontSize + delta));
 	updateElement(selectedElementId, { fontSize: newSize }, true); } }
 	function updateFontSizeFromInput(event: Event) { if (selectedElement?.type === 'text' && selectedElementId !== null) { const input = event.target as HTMLInputElement;
 	let newSize = parseInt(input.value); if (!isNaN(newSize)) { newSize = Math.max(8, Math.min(120, newSize)); updateElement(selectedElementId, { fontSize: newSize }, true);
-	if (parseInt(input.value) !== newSize) input.value = newSize.toString(); } else { input.value = selectedElement.fontSize.toString(); } } }
+	if (parseInt(input.value) !== newSize) input.value = newSize.toString(); } else { input.value = selectedElement.fontSize.toString();
+	} } }
 
 	// --- Formateo de listas (mantener tu lógica previa si la tienes) ---
 	async function formatList(command: 'insertUnorderedList' | 'insertOrderedList') {
 		if (!browser || !selectedElement || selectedElement.type !== 'text' || selectedElementId === null) return;
-		const normalized = command === 'insertUnorderedList' ? 'ul' : 'ol';
+	const normalized = command === 'insertUnorderedList' ? 'ul' : 'ol';
 		const wrapper = document.querySelector(`[data-element-id="${selectedElementId}"]`);
 		if (!wrapper) return;
-		wrapper.dispatchEvent(new CustomEvent('toggle-list', { detail: { type: normalized }, bubbles: true }));
+	wrapper.dispatchEvent(new CustomEvent('toggle-list', { detail: { type: normalized }, bubbles: true }));
 	}
 
-	function stopToolbarClick(event: MouseEvent) { event.stopPropagation(); }
+	function stopToolbarClick(event: MouseEvent) { event.stopPropagation();
+	}
 
 	// --- ATAJOS DE TECLADO ---
 	function handleKeyDown(event: KeyboardEvent) { if ((event.target as HTMLElement)?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement)?.tagName)) return;
@@ -182,7 +291,7 @@
 	} else if (event.key === 'u') { event.preventDefault(); toggleStyle('isUnderlined'); } } else if (event.key === 'Delete' || event.key === 'Backspace') { if (selectedElementId !== null) { event.preventDefault();
 	deleteSelected(); } } }
 	$effect(() => { if (browser) { document.addEventListener('keydown', handleKeyDown); return () => document.removeEventListener('keydown', handleKeyDown); } });
-</script>
+	</script>
 
 <svelte:head>
 	<title>Editor - {templateId} - DUA-Conecta</title>
@@ -282,7 +391,7 @@
 		{/if}
 
 		<div class="editor-canvas-area" onclick={deselect}>
-			<div class="canvas-container" onmousedown={deselect}>
+			<div class="canvas-container" onmousedown={deselect} bind:this={canvasContainerRef}>
 				{#each elements as element (element.id)}
 					<Draggable
 						data-element-id={element.id}
@@ -303,39 +412,54 @@
 <style>
 	.editor-layout { display: flex;
  height: 100vh; overflow: hidden; }
-	.editor-sidebar { width: 280px; flex-shrink: 0; background-color: var(--bg-card); border-right: 1px solid var(--border-color); padding: 1.5rem; overflow-y: auto;
- display: flex; flex-direction: column; gap: 1rem; }
+	.editor-sidebar { width: 280px;
+ flex-shrink: 0; background-color: var(--bg-card); border-right: 1px solid var(--border-color); padding: 1.5rem; overflow-y: auto;
+ display: flex; flex-direction: column; gap: 1rem;
+ }
 	.back-button { text-decoration: none; color: var(--text-light); font-weight: 600; display: flex; align-items: center; gap: 0.5rem;
- margin-bottom: 0rem; transition: color 0.2s ease; }
+ margin-bottom: 0rem; transition: color 0.2s ease;
+ }
     .back-button svg { flex-shrink: 0; fill: none; stroke: currentColor;
- stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+ stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+ }
 	.back-button:hover { color: var(--primary-color); }
 	.history-controls { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color);
  padding-bottom: 1rem; }
-	.icon-button { width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; padding: 0; background-color: var(--bg-section);
- border: 1px solid var(--border-color); color: var(--text-light); border-radius: 6px; cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;}
+	.icon-button { width: 32px;
+ height: 32px; display: flex; justify-content: center; align-items: center; padding: 0; background-color: var(--bg-section);
+ border: 1px solid var(--border-color); color: var(--text-light); border-radius: 6px;
+ cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;}
 	.icon-button svg { fill: none;
- stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 18px; height: 18px;}
+ stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+ width: 18px; height: 18px;}
 	.icon-button:hover:not(:disabled) { border-color: var(--primary-color); color: var(--primary-color); background-color: transparent;
  }
-	.icon-button:disabled { opacity: 0.5; cursor: not-allowed; }
+	.icon-button:disabled { opacity: 0.5; cursor: not-allowed;
+ }
 	.tool-section h3 { font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 1rem 0;
- padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); }
+ padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);
+ }
 	.editor-sidebar button:not(.icon-button), .editor-sidebar .btn-upload { width: 100%; text-align: center; padding: 0.6rem 1rem; font-size: 0.85rem;
- margin-bottom: 0.5rem; }
+ margin-bottom: 0.5rem;
+ }
 	.editor-sidebar input[type="file"] { display: none; }
 	.prop-label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); margin-top: 0.8rem; margin-bottom: 0.3rem;
- display: block; }
+ display: block;
+ }
 	.btn-delete { background-color: #f15e5e; color: white; border-color: #f15e5e; margin-top: 1rem; }
 	.btn-delete:hover { background-color: #e53e3e; border-color: #e53e3e;
  }
-	.actions { margin-top: auto; padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
+	.actions { margin-top: auto;
+ padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
 	.actions button:first-child { margin-bottom: 0.75rem;
  }
-    .editor-main-area { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; background-color: var(--bg-section);
+    .editor-main-area { flex-grow: 1;
+ display: flex; flex-direction: column; overflow: hidden; position: relative; background-color: var(--bg-section);
  }
-    .text-toolbar { position: absolute; top: 1rem; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.4rem;
- padding: 0.3rem 0.5rem; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 1001; white-space: nowrap;
+    .text-toolbar { position: absolute; top: 1rem;
+ left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.4rem;
+ padding: 0.3rem 0.5rem; background-color: var(--bg-card); border: 1px solid var(--border-color);
+ border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 1001; white-space: nowrap;
  }
     .toolbar-select, .toolbar-input { padding: 0.2rem 0.4rem; border-radius: 4px; border: 1px solid var(--border-color); background-color: var(--bg-section); color: var(--text-dark);
  font-size: 0.75rem; height: 28px; box-sizing: border-box; outline: none; }
@@ -388,12 +512,12 @@
     /* NUEVOS ESTILOS PARA LA SECCIÓN DE FORMAS */
     .shape-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+ grid-template-columns: repeat(4, 1fr);
         gap: 0.5rem;
     }
     .shape-button {
         background-color: var(--bg-card);
-        border: 1px solid var(--border-color);
+ border: 1px solid var(--border-color);
         border-radius: 8px;
         width: 100%;
         height: 40px;
@@ -401,77 +525,78 @@
         justify-content: center;
         align-items: center;
         cursor: pointer;
-        transition: all 0.2s ease;
+ transition: all 0.2s ease;
         color: var(--text-light);
     }
     .shape-button:hover {
         border-color: var(--primary-color);
-        color: var(--primary-color);
+ color: var(--primary-color);
     }
     .shape-button svg {
         width: 24px;
         height: 24px;
-        stroke-width: 2.5;
+ stroke-width: 2.5;
     }
 
     /* ESTILOS DE PROPIEDADES DE FORMAS */
     .shape-properties, .general-properties {
         padding: 0.5rem 0;
-        border-top: 1px solid var(--border-color);
+ border-top: 1px solid var(--border-color);
         border-bottom: 1px solid var(--border-color);
         margin: 1rem 0;
-    }
+ }
     .shape-properties input[type="color"] {
         width: 100%;
         height: 35px;
-        border: 1px solid var(--border-color);
+ border: 1px solid var(--border-color);
         border-radius: 8px;
         padding: 0;
         background: none;
         cursor: pointer;
-    }
+ }
     .shape-properties input[type="range"], .general-properties input[type="range"] {
         width: 100%;
         margin-top: 0.5rem;
-    }
+ }
     
     .font-size-control {
         display: flex;
-        align-items: center;
+ align-items: center;
         background-color: var(--bg-section);
         border: 1px solid var(--border-color);
         border-radius: 4px;
         overflow: hidden;
-    }
+ }
     .font-size-control .icon-button {
         border: none;
         border-radius: 0;
         background-color: transparent;
-        width: 26px;
+ width: 26px;
         height: 26px;
         color: var(--text-light);
     }
     .font-size-control .icon-button:hover:not(:disabled) {
         background-color: rgba(0,0,0,0.05);
-        color: var(--primary-color);
+ color: var(--primary-color);
     }
     .font-size-control .icon-button:disabled {
         opacity: 0.4;
-    }
+ }
     .font-size-control .icon-button svg {
         width: 16px;
         height: 16px;
-    }
+ }
     .font-size-input {
         width: 35px;
         text-align: center;
         margin: 0;
-        padding: 0.2rem;
+ padding: 0.2rem;
         border: none;
         height: 26px;
         background-color: transparent;
     }
 	.btn-secondary { display:inline-block; padding:0.5rem 0.8rem; margin-right:4px; margin-top:6px; }
-	.icon-button { width: 32px; height: 32px; display:flex; align-items:center; justify-content:center; }
+	.icon-button { width: 32px;
+ height: 32px; display:flex; align-items:center; justify-content:center; }
 	.color-indicator { width: 24px; height: 18px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.08); }
 </style>

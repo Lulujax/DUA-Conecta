@@ -126,7 +126,7 @@ const app = new Elysia()
                      set.status = 200; return { success: true, message: 'Contraseña actualizada.' };
                  } catch (error) {
                      console.error("Error en /auth/reset-password:", error);
-                     set.status = 500; return { error: 'Error interno del servidor.' };
+                     set.status = 500; return { error: 'Error interno del servidor.' }
                  }
             })
     )
@@ -157,6 +157,67 @@ const app = new Elysia()
             } catch (error) {
                 console.error("Error en /api/user/change-password:", error);
                 set.status = 500; return { error: 'Error interno del servidor.' };
+            }
+        })
+        // --- RUTA PARA GUARDAR ACTIVIDAD ---
+        .post('/activities/save', async ({ profile, body, set }) => {
+            const userId = (profile as any).userId;
+            const ActivitySchema = z.object({
+                name: z.string().min(1, "El nombre de la actividad es requerido."),
+                templateId: z.string().min(1),
+                elements: z.array(z.any()), 
+            });
+
+            const validation = ActivitySchema.safeParse(body);
+            if (!validation.success) { 
+                set.status = 400; 
+                return { error: 'Datos de actividad inválidos.', details: validation.error.issues }; 
+            }
+            
+            const { name, templateId, elements } = validation.data;
+            
+            try {
+                // Insertamos la nueva actividad en la tabla saved_activities
+                await sql`
+                    INSERT INTO saved_activities (user_id, name, template_id, elements)
+                    VALUES (${userId}, ${name}, ${templateId}, ${JSON.stringify(elements)})
+                `;
+                
+                set.status = 201; 
+                return { success: true, message: '¡Actividad guardada con éxito!' };
+            } catch (error) {
+                 // Manejo de error específico si la tabla no existe
+                if (error instanceof postgres.PostgresError && error.code === '42P01') {
+                    set.status = 500;
+                    return { error: 'Error: La tabla saved_activities no existe. Ejecuta el SQL de creación.' };
+                }
+                console.error("Error al guardar actividad:", error);
+                set.status = 500; 
+                return { error: 'Error interno del servidor al guardar la actividad.' };
+            }
+        })
+        // --- NUEVA RUTA PARA OBTENER ACTIVIDADES GUARDADAS ---
+        .get('/activities', async ({ profile, set }) => {
+            const userId = (profile as any).userId;
+            try {
+                // Solo seleccionamos los campos necesarios para la lista, no el JSON completo.
+                const activities = await sql`
+                    SELECT id, name, template_id, created_at, updated_at
+                    FROM saved_activities
+                    WHERE user_id = ${userId}
+                    ORDER BY updated_at DESC
+                `;
+                set.status = 200;
+                return { success: true, activities };
+            } catch (error) {
+                console.error("Error al obtener actividades:", error);
+                 // Manejo de error si la tabla no existe
+                if (error instanceof postgres.PostgresError && error.code === '42P01') {
+                    set.status = 200; // Devolvemos 200 pero con array vacío
+                    return { success: true, activities: [] };
+                }
+                set.status = 500;
+                return { error: 'Error interno del servidor al obtener actividades.' };
             }
         })
     )
