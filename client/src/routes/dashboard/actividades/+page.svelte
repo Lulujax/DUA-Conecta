@@ -103,7 +103,7 @@ Empieza por explorar nuestra increíble colección de plantillas y personaliza t
     {:else}
         <div class="activities-grid">
             {#each savedActivities as activity (activity.id)}
-                <a href="/editor/{activity.template_id}?activityId={activity.id}" class="activity-card">
+                <a href="/editor/{activity.template_id}?activityId={activity.id}&name={encodeURIComponent(activity.name)}" class="activity-card">
                      <div class="card-icon">📚</div>
                     <div class="card-content">
                         <h3>{activity.name}</h3>

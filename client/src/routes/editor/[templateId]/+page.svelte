@@ -21,11 +21,11 @@ null = null;
         const urlParams = new URLSearchParams(window.location.search);
         const activityIdParam = urlParams.get('activityId');
 		// El nombre es pasado desde "Mis Actividades"
-        const activityNameParam = urlParams.get('name');
+        const activityNameParam = urlParams.get('name'); // <-- Esto lo arreglamos en el Archivo 2
 		if (activityIdParam) {
             initialActivityId = parseInt(activityIdParam);
 			if (activityNameParam) {
-                initialActivityName = activityNameParam;
+                initialActivityName = decodeURIComponent(activityNameParam); // Decodificamos el nombre
 			}
         }
     }
@@ -132,7 +132,7 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
              alert(`${errorMsg} Se ha cargado la plantilla base.`);
 			// Si falla la carga, volvemos a la plantilla base
             elements = structuredClone(BASE_ELEMENTS);
-			currentActivityId = null;
+			currentActivityId = null; // IMPORTANTE: Se resetea a null para que sea un "Guardar Nuevo"
         }
     }
 
