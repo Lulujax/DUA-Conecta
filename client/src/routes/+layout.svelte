@@ -3,15 +3,12 @@
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import { browser } from '$app/environment';
-  import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
-  import { user } from '$lib/stores/auth';
+  // *** IMPORTANTE: Ya no importamos 'page', 'goto', ni 'user' aquí ***
 
   /** @type {{children: import('svelte').Snippet}} */
   let { children } = $props();
 
-  // --- CORRECCIÓN: Se eliminó la anotación de tipo <string | null> ---
-  // Svelte infiere el tipo (string | null) correctamente a partir del valor inicial.
+  // La lógica del tema (theme) está perfecta y se queda aquí.
   const theme = writable(null);
 
   onMount(() => {
@@ -35,16 +32,8 @@
     return () => unsubscribe(); 
   });
 
-  $effect(() => {
-    if (browser) {
-      const { pathname } = $page.url;
-      const currentUser = $user;
-
-      if (!currentUser && pathname.startsWith('/dashboard')) {
-        goto('/login');
-      }
-    }
-  });
+  // *** IMPORTANTE: El $effect (guardia de seguridad) se ha ELIMINADO de este archivo. ***
+  // Su lugar correcto es en 'dashboard/+layout.svelte'.
 
   function toggleTheme() {
     theme.update(current => (current === 'light' ? 'dark' : 'light'));
@@ -61,6 +50,7 @@
 </div>
 
 <style>
+  /* El <style> se queda exactamente igual que como lo tenías */
   .layout-wrapper {
     width: 100%;
     min-height: 100vh;
@@ -69,7 +59,8 @@
   }
   .theme-toggle {
     position: fixed; top: 1rem; right: 1.5rem; z-index: 1001;
-    background-color: var(--bg-card); border: 1px solid var(--border-color);
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
     border-radius: 50%; width: 44px; height: 44px; display: flex;
     justify-content: center; align-items: center; cursor: pointer;
     box-shadow: 0 4px 10px rgba(0,0,0,0.1); transition: all 0.3s ease;
