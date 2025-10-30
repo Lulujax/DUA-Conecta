@@ -4,7 +4,7 @@
 	import Draggable from '$lib/editor/Draggable.svelte';
 	import { browser } from '$app/environment';
 	import { tick } from 'svelte';
-	
+	import { PUBLIC_API_URL } from '$env/static/public';
 	// --- IMPORTS ADICIONALES ---
 	import html2canvas from 'html2canvas';
 	import { jsPDF } from 'jspdf';
@@ -94,7 +94,7 @@
         }
 
         try {
-            const response = await fetch(`http://localhost:3000/api/activities/${id}`, {
+            const response = await fetch(`${PUBLIC_API_URL}/api/activities/${id}`, {
                 method: 'GET',
                 headers: { 'Authorization': `Bearer ${currentUser.token}` }
             });

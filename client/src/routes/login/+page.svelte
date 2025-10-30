@@ -1,7 +1,7 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
     import { user } from '$lib/stores/auth';
-
+    import { PUBLIC_API_URL } from '$env/static/public';
     let isLoading = false;
     let passwordFieldType = 'password';
     let formError = '';
@@ -16,7 +16,7 @@
         formError = '';
 
         try {
-            const response = await fetch('http://localhost:3000/auth/login', {
+            const response = await fetch('${PUBLIC_API_URL}/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData),

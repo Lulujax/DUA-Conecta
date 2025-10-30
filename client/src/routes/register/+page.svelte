@@ -1,6 +1,6 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
-
+    import { PUBLIC_API_URL } from '$env/static/public';
     // --- ESTADO DEL COMPONENTE ---
     let isLoading = false;
     let passwordFieldType = 'password';
@@ -36,7 +36,7 @@
 
         try {
             // 2. Enviamos los datos al backend usando fetch
-            const response = await fetch('http://localhost:3000/auth/register', {
+            const response = await fetch('${PUBLIC_API_URL}/auth/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

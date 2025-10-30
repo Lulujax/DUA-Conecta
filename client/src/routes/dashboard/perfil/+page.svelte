@@ -1,6 +1,6 @@
 <script lang="ts">
     import { user } from '$lib/stores/auth';
-
+    import { PUBLIC_API_URL } from '$env/static/public';
     let currentUser = { name: '', email: '', token: '' };
     user.subscribe(value => {
         if (value) {
@@ -28,7 +28,7 @@
         formMessage = ''; // Limpiamos el mensaje anterior
 
         try {
-            const response = await fetch('http://localhost:3000/api/user/change-password', {
+            const response = await fetch('${PUBLIC_API_URL}/api/user/change-password', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { user } from '$lib/stores/auth';
-
+    import { PUBLIC_API_URL } from '$env/static/public';
     // Inicializamos con un array vacío.
     let savedActivities: Array<any> = [];
     let isLoading = true;
@@ -26,7 +26,7 @@
         }
 
         try {
-            const response = await fetch('http://localhost:3000/api/activities', {
+            const response = await fetch('${PUBLIC_API_URL}/api/activities', {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${currentUser.token}`

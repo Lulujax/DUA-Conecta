@@ -1,6 +1,7 @@
 <script lang="ts">
+    import { PUBLIC_API_URL } from '$env/static/public';
     let isLoading = false;
-    let emailSent = false; // Para controlar si mostramos el formulario o el mensaje de éxito
+    let emailSent = false;
     let formError = '';
     let email = '';
 
@@ -9,7 +10,7 @@
         formError = '';
 
         try {
-            const response = await fetch('http://localhost:3000/auth/forgot-password', {
+            const response = await fetch('${PUBLIC_API_URL}/auth/forgot-password', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

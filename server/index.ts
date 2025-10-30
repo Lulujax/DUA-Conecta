@@ -11,7 +11,8 @@ if (!process.env.JWT_SECRET || !process.env.RESEND_API_KEY) {
     throw new Error("Revisa tu archivo .env. JWT_SECRET y RESEND_API_KEY son requeridos.");
 }
 
-const sql = postgres('postgres://postgres:1234@localhost:5432/dua_conecta_db')
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:1234@localhost:5432/dua_conecta_db'
+const sql = postgres(DATABASE_URL)
 console.log('PostgreSQL conectado y listo.')
 
 const resend = new Resend(process.env.RESEND_API_KEY);
