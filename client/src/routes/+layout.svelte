@@ -33,7 +33,8 @@
   });
 
   // *** IMPORTANTE: El $effect (guardia de seguridad) se ha ELIMINADO de este archivo. ***
-  // Su lugar correcto es en 'dashboard/+layout.svelte'.
+  // (Tu archivo 'dashboard/+layout.svelte' ya tiene esta lógica,
+  // que es el lugar correcto).
 
   function toggleTheme() {
     theme.update(current => (current === 'light' ? 'dark' : 'light'));
