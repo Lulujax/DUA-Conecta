@@ -4,12 +4,12 @@
 	import Draggable from '$lib/editor/Draggable.svelte';
 	import { browser } from '$app/environment';
 	import { tick } from 'svelte';
-
+	
 	// --- IMPORTS ADICIONALES ---
 	import html2canvas from 'html2canvas';
 	import { jsPDF } from 'jspdf';
 	import { user } from '$lib/stores/auth';
-	// --- AÑADIDO: Importar la variable de entorno ---
+    // --- IMPORTACIÓN CORREGIDA ---
 	import { PUBLIC_API_URL } from '$env/static/public';
 
 	const templateId = $page.params.templateId;
@@ -34,7 +34,7 @@ null = null;
 	// ID para saber si es UPDATE
     let activityName = $state<string>(initialActivityName);
 	// Nombre visible
-
+    
 	let selectedElementId = $state<number | null>(null);
 	// --- NUEVA REFERENCIA: Contenedor del Canvas ---
 	let canvasContainerRef: HTMLDivElement | null = $state(null);
@@ -52,25 +52,25 @@ null = null;
 	const BASE_ELEMENTS: Array<any> = [
 		{ id: 1, type: 'text', content: 'Nombre:', x: 50, y: 40, width: 60, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false},
 		{ id: 101, type: 'text', content: '_____________________', x: 115, y: 40, width: 180, height: 20, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false},
-		{ id: 2, type: 'text', content: 'Fecha:', x: 350, y: 40, width: 50, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false
+		{ id: 2, type: 'text', content: 'Fecha:', x: 350, y: 40, width: 50, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false 
 },
 		{ id: 102, type: 'text', content: '__________', x: 405, y: 40, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false},
 		{ id: 3, type: 'text', content: 'Grado:', x: 550, y: 40, width: 50, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false },
 		{ id: 103, type: 'text', content: '______', x: 605, y: 40, width: 80, height: 20, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false},
-		{ id: 4, type: 'text', content: 'El Monstruo de las Emociones', x: 50, y: 90, width: 600, height: 35,
+		{ id: 4, type: 'text', content: 'El Monstruo de las Emociones', x: 50, y: 90, width: 600, height: 35, 
 fontSize: 24, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', isItalic: false, isUnderlined: false },
 		{ id: 6, type: 'text', content: 'El monstruo siente muchas emociones, dice que en cada parte de su cuerpo hay una emoción ¿En qué parte del cuerpo sientes la emoción?', x: 50, y: 140, width: 600, height: 40, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false },
 		{ id: 7, type: 'text', content: 'COLORES Y EMOCIONES:', x: 50, y: 200, width: 600, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false },
-		{ id: 8, type: 'text',
+		{ id: 8, type: 'text', 
 content: '• ROJO - IRA/MOLESTIA', x: 70, y: 230, width: 250, height: 18, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false },
 		{ id: 9, type: 'text', content: '• MORADO - MIEDO', x: 70, y: 250, width: 250, height: 18, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false },
 		{ id: 10, type: 'text', content: '• AZUL - TRISTEZA', x: 70, y: 270, width: 250, height: 18, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false },
-		{ id: 11, type: 'text', content: '• AMARILLO - FELICIDAD', x: 70, y: 290, width:
+		{ id: 11, type: 'text', content: '• AMARILLO - FELICIDAD', x: 70, y: 290, width: 
 250, height: 18, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false },
 		{ id: 12, type: 'text', content: '• VERDE - ASCO', x: 70, y: 310, width: 250, height: 18, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false },
 		{ id: 5, type: 'image', url: '/asdasda-removebg-preview.png', x: 200, y: 360, width: 300, height: 300 },
 		{ id: 13, type: 'text', content: '¡Gana tu ficha aquí!', x: 380, y: 920, width: 160, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'right', fontFamily: 'Arial', isItalic: false, isUnderlined: false},
-		{ id: 113, type: 'text', content: '___________', x: 550,
+		{ id: 113, type: 'text', content: '___________', x: 550, 
 y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', isItalic: false, isUnderlined: false}
 	];
 	// --- LÓGICA DE HISTORIAL ---
@@ -85,7 +85,6 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
             loadActivity(currentActivityId);
         }
     });
-
 	async function loadActivity(id: number) {
         const currentUser = $user;
 		if (!currentUser || !currentUser.token) {
@@ -94,17 +93,16 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
         }
 
         try {
-            // --- MODIFICADO: Usar PUBLIC_API_URL ---
+            // --- FETCH CORREGIDO ---
             const response = await fetch(`${PUBLIC_API_URL}/api/activities/${id}`, {
                 method: 'GET',
                 headers: { 'Authorization': `Bearer ${currentUser.token}` }
             });
 
-            // --- AÑADIDO: Mejor manejo de errores JSON ---
+            // --- MANEJO DE ERRORES MEJORADO ---
             if (!response.headers.get('content-type')?.includes('application/json')) {
-                throw new Error(`Respuesta inesperada del servidor al cargar actividad. Código: ${response.status}`);
+                 throw new Error(`Respuesta inesperada del servidor. Código: ${response.status}`);
             }
-
 			const result = await response.json();
 
             if (!response.ok) {
@@ -122,11 +120,11 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
 			history = [currentStateString];
             historyIndex = 0;
             hasUnsavedChanges = false;
-
+            
         } catch (error) {
             console.error('Fallo al cargar la actividad:', error);
              let errorMsg = 'Error al cargar la actividad guardada.';
-             if (error instanceof SyntaxError && error.message.includes("JSON")) {
+             if (error instanceof SyntaxError) {
                  errorMsg += " Respuesta inesperada del servidor.";
              } else if (error instanceof Error) {
                  errorMsg += ` ${error.message}`;
@@ -190,7 +188,7 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
 		}
 	}
     // Aseguramos la reactividad en el select también
-	function selectElement(id: number, e: MouseEvent | KeyboardEvent) {
+	function selectElement(id: number, e: MouseEvent | KeyboardEvent) { 
         e.stopPropagation();
 		selectedElementId = id;
         const index = elements.findIndex((el) => el.id === id);
@@ -237,7 +235,8 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
 			x: 100,
 			y: 100,
 			width: type === 'circle' ? 80 : 140,
-			height: type === 'circle' ? 80 : 20,
+			height: type === 'circle' ?
+80 : 20,
 			stroke: '#000000',
 			fill: 'transparent',
 			strokeWidth: 4,
@@ -249,6 +248,7 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
 		saveStateToHistory();
 	}
 
+
 	// --- Acciones de Guardado/Descarga (REFACTORIZADO) ---
 	async function saveChanges() {
         const currentUser = $user;
@@ -256,14 +256,14 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
             alert("No estás autenticado. Por favor, inicia sesión.");
 			return;
         }
-
+        
         let targetUrl: string;
 		let method: 'POST' | 'PUT';
         let nameToSave = activityName.trim();
 
         if (currentActivityId) {
             // Caso 1: Actualizar actividad existente (No pide nombre)
-            // --- MODIFICADO: Usar PUBLIC_API_URL ---
+            // --- FETCH CORREGIDO ---
             targetUrl = `${PUBLIC_API_URL}/api/activities/${currentActivityId}`;
 			method = 'PUT';
         } else {
@@ -274,7 +274,7 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
 				return;
             }
             nameToSave = inputName.trim();
-            // --- MODIFICADO: Usar PUBLIC_API_URL ---
+            // --- FETCH CORREGIDO ---
             targetUrl = `${PUBLIC_API_URL}/api/activities/save`;
 			method = 'POST';
         }
@@ -287,20 +287,20 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
 		try {
             const response = await fetch(targetUrl, {
                 method: method,
-                headers: {
+                headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${currentUser.token}`
+    
 				},
                 body: JSON.stringify(payload),
             });
 
-            // --- AÑADIDO: Mejor manejo de errores JSON ---
+            // --- MANEJO DE ERRORES MEJORADO ---
             if (!response.headers.get('content-type')?.includes('application/json')) {
-                throw new Error(`Respuesta inesperada del servidor al guardar. Código: ${response.status}`);
+                 throw new Error(`Respuesta inesperada del servidor. Código: ${response.status}`);
             }
-
 			const body = await response.json();
-
+            
             if (!response.ok) {
                 throw new Error(body.error || `Error ${method === 'PUT' ? 'al actualizar' : 'al guardar'} la actividad.`);
 			}
@@ -309,27 +309,27 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
             if (method === 'POST' && body.activityId) {
                 currentActivityId = body.activityId;
 			}
-
+            
             // Actualizar el nombre de la actividad
             activityName = nameToSave;
 			// Limpiar historial/banderas
-            hasUnsavedChanges = false;
+            hasUnsavedChanges = false; 
             history = [JSON.stringify(elements)];
 			historyIndex = 0;
             alert(body.message || `¡Actividad "${activityName}" guardada con éxito!`);
 		} catch (error) {
             console.error('Error en el guardado:', error);
-            let errorMsg = 'Fallo al guardar/actualizar la actividad:';
-            if (error instanceof SyntaxError && error.message.includes("JSON")) {
-                errorMsg += " Respuesta inesperada del servidor.";
-            } else if (error instanceof Error) {
-                errorMsg += ` ${error.message}`;
-            }
-            alert(errorMsg);
+             let errorMsg = 'Fallo al guardar/actualizar la actividad:';
+             if (error instanceof SyntaxError) {
+                 errorMsg += " Respuesta inesperada del servidor.";
+             } else if (error instanceof Error) {
+                 errorMsg += ` ${error.message}`;
+             }
+             alert(errorMsg);
         }
 	}
-
-	// IMPLEMENTACIÓN COMPLETA DE DESCARGA PDF
+    
+	// IMPLEMENTACIÓN COMPLETA DE DESCARGA PDF 
 	async function downloadPdf() {
         if (!canvasContainerRef) {
             console.error('No se encontró el contenedor del canvas.');
@@ -342,22 +342,23 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
         await tick();
 
         const options = {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#FFFFFF',
-            scrollY: -window.scrollY,
+            scale: 2, 
+            useCORS: true, 
+            backgroundColor: '#FFFFFF', 
+            scrollY: -window.scrollY, 
             scrollX: -window.scrollX,
             windowWidth: canvasContainerRef.scrollWidth,
+       
 			windowHeight: canvasContainerRef.scrollHeight
         };
 		try {
             const canvas = await html2canvas(canvasContainerRef, options);
-			const imgData = canvas.toDataURL('image/jpeg', 1.0);
+			const imgData = canvas.toDataURL('image/jpeg', 1.0); 
 
-            const pdf = new jsPDF('p', 'px', 'a4');
+            const pdf = new jsPDF('p', 'px', 'a4'); 
             const pdfWidth = pdf.internal.pageSize.getWidth();
 			const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
+            
             pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
             pdf.save(`DUA-Conecta_Actividad_${activityName.replace(/\s/g, '_')}.pdf`);
 
@@ -429,7 +430,7 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
 			<div style="margin-top:8px;">
 				<button class="btn-secondary" onclick={() => addShape('arrow')}>+ Flecha</button>
 				<button class="btn-secondary" onclick={() => addShape('line')}>+ Línea</button>
-				<button class="btn-secondary" onclick={() =>
+				<button class="btn-secondary" onclick={() => 
 addShape('circle')}>+ Círculo</button>
 			</div>
 		</div>
@@ -487,14 +488,14 @@ color: var(--text-light);">Edita en la barra superior.</p>{/if}
 	<div class="editor-main-area">
 		{#if selectedElement?.type === 'text'}
             <div class="text-toolbar" role="toolbar" aria-label="Herramientas de texto" onclick={stopToolbarClick} onmousedown={stopToolbarClick}>
-				 <select class="toolbar-select" value={selectedElement.fontFamily} onchange={(e) =>
+				 <select class="toolbar-select" value={selectedElement.fontFamily} onchange={(e) => 
 updateElement(selectedElementId!, { fontFamily: e.currentTarget.value }, true)}>
                     {#each availableFonts as font}
                         <option value={font} style:font-family={font}>{font}</option>
                     {/each}
                  </select>
 				<div class="font-size-control">
-					<button class="icon-button" onclick={() => changeFontSize(-1)} title="Reducir tamaño" disabled={selectedElement.fontSize
+					<button class="icon-button" onclick={() => changeFontSize(-1)} title="Reducir tamaño" disabled={selectedElement.fontSize 
 <= 8}><svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 13H5v-2h14v2z"></path></svg></button>
 					<input type="number" class="toolbar-input font-size-input" min="8" max="120" step="1" value={selectedElement.fontSize} onchange={updateFontSizeFromInput} onblur={updateFontSizeFromInput} onkeydown={(e) => { if(e.key === 'Enter') { e.preventDefault();
 updateFontSizeFromInput(e); (e.target as HTMLElement).blur();} }}/>
@@ -642,7 +643,7 @@ class="snap-line vertical" style:left="{verticalSnapLine}px"></div>{/if}
     .snap-line.vertical { width: 1px; height: 100%; top: 0; }
     .snap-line.horizontal { height: 1px;
  width: 100%; left: 0; }
-
+     
     /* NUEVOS ESTILOS PARA LA SECCIÓN DE FORMAS */
     .shape-grid {
         display: grid;
@@ -692,7 +693,7 @@ class="snap-line vertical" style:left="{verticalSnapLine}px"></div>{/if}
         width: 100%;
         margin-top: 0.5rem;
  }
-
+    
     .font-size-control {
         display: flex;
  align-items: center;
