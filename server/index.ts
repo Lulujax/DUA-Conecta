@@ -12,7 +12,9 @@ if (!process.env.JWT_SECRET || !process.env.RESEND_API_KEY) {
 }
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:1234@localhost:5432/dua_conecta_db'
-const sql = postgres(DATABASE_URL)
+const sql = postgres(DATABASE_URL, {
+  ssl: 'require' // Forza el uso de SSL/TLS
+})
 console.log('PostgreSQL conectado y listo.')
 
 const resend = new Resend(process.env.RESEND_API_KEY);
