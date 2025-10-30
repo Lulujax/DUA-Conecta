@@ -273,6 +273,6 @@ const app = new Elysia()
     )
 
     .get('/', () => '¡El servidor de DUA-Conecta está funcionando! 👋')
-    .listen(3000);
+    .listen(process.env.PORT || 3000);
 
 console.log(`🦊 Servidor Elysia corriendo en http://${app.server?.hostname}:${app.server?.port}`);
