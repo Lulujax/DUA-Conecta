@@ -9,7 +9,7 @@ function createAuthStore() {
     if (browser) {
         try {
             const storedUser = window.localStorage.getItem('user');
-            if (storedUser) {
+            if (storedUser && storedUser !== 'undefined') { // Verificación extra
                 initialUser = JSON.parse(storedUser);
             }
         } catch (error) {
@@ -35,4 +35,5 @@ function createAuthStore() {
     return store;
 }
 
+// Exportamos el store creado con la función segura
 export const user = createAuthStore();
