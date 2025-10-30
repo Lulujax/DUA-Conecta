@@ -5,11 +5,10 @@ const config = {
 	kit: {
 		adapter: adapter(),
 
-		// --- AÑADE ESTO ---
+		// --- Esta es la línea que soluciona el error ---
 		prerender: {
 			handleMissingId: 'ignore'
 		}
-		// --- FIN DE LO AÑADIDO ---
 	}
 };
 
