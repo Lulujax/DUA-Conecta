@@ -1,18 +1,38 @@
 import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
 
-// Este store guardará la información del usuario (token, nombre, etc.)
-// Lo inicializamos con los datos de localStorage para mantener la sesión entre recargas.
-const initialValue = browser ? window.localStorage.getItem('user') : null;
-export const user = writable(initialValue ? JSON.parse(initialValue) : null);
+// --- FUNCIÓN SEGURA PARA INICIALIZAR EL STORE ---
+function createAuthStore() {
+    let initialUser = null;
 
-// Cada vez que el store del usuario cambie, actualizamos localStorage.
-user.subscribe((value) => {
-  if (browser) {
-    if (value) {
-      window.localStorage.setItem('user', JSON.stringify(value));
-    } else {
-      window.localStorage.removeItem('user');
+    // Solo intentamos leer localStorage si estamos en el navegador
+    if (browser) {
+        try {
+            const storedUser = window.localStorage.getItem('user');
+            if (storedUser) {
+                initialUser = JSON.parse(storedUser);
+            }
+        } catch (error) {
+            // Si JSON.parse falla (datos corruptos), lo ignoramos y dejamos initialUser = null
+            console.error("Error al parsear usuario desde localStorage:", error);
+            window.localStorage.removeItem('user'); // Limpiamos los datos corruptos
+        }
     }
-  }
-});
+
+    const store = writable(initialUser);
+
+    // Cada vez que el store del usuario cambie, actualizamos localStorage.
+    store.subscribe((value) => {
+        if (browser) {
+            if (value) {
+                window.localStorage.setItem('user', JSON.stringify(value));
+            } else {
+                window.localStorage.removeItem('user');
+            }
+        }
+    });
+
+    return store;
+}
+
+export const user = createAuthStore();
