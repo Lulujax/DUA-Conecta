@@ -9,7 +9,7 @@
 	import html2canvas from 'html2canvas';
 	import { jsPDF } from 'jspdf';
 	import { user } from '$lib/stores/auth';
-    // --- IMPORTACIÓN CORREGIDA ---
+	// --- IMPORTACIÓN CORREGIDA ---
 	import { PUBLIC_API_URL } from '$env/static/public';
 
 	const templateId = $page.params.templateId;
@@ -30,7 +30,8 @@ null = null;
         }
     }
 
-	let currentActivityId = $state<number | null>(initialActivityId);
+	let currentActivityId = $state<number |
+null>(initialActivityId);
 	// ID para saber si es UPDATE
     let activityName = $state<string>(initialActivityName);
 	// Nombre visible
@@ -99,19 +100,28 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
                 headers: { 'Authorization': `Bearer ${currentUser.token}` }
             });
 
-            // --- MANEJO DE ERRORES MEJORADO ---
+			// --- MANEJO DE ERRORES MEJORADO ---
             if (!response.headers.get('content-type')?.includes('application/json')) {
                  throw new Error(`Respuesta inesperada del servidor. Código: ${response.status}`);
-            }
+			}
 			const result = await response.json();
 
             if (!response.ok) {
                 throw new Error(result.error || 'Error al cargar la actividad.');
 			}
 
-            // Establecer el estado con el contenido cargado
-            elements = result.activity.elements;
-			activityName = result.activity.name; // Cargar el nombre
+            // --- FIX: BUG DE CONGELAMIENTO ---
+            // Asegura que los elementos cargados tengan un z-index base para que sean interactivos
+            const loadedElements = result.activity.elements.map((el: any, i: number) => ({
+                ...el,
+                z: el.z || i + 1 // Asigna z-index basado en el orden si no existe
+            }));
+            
+            elements = loadedElements;
+            nextZIndex = loadedElements.length + 1; // Actualiza el contador de z-index
+            // --- FIN DEL FIX ---
+
+            activityName = result.activity.name; // Cargar el nombre
             currentActivityId = id;
 			// Aseguramos el ID para futuras actualizaciones
 
@@ -132,7 +142,7 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
              alert(`${errorMsg} Se ha cargado la plantilla base.`);
 			// Si falla la carga, volvemos a la plantilla base
             elements = structuredClone(BASE_ELEMENTS);
-			currentActivityId = null; // IMPORTANTE: Se resetea a null para que sea un "Guardar Nuevo"
+            currentActivityId = null; // IMPORTANTE: Se resetea a null para que sea un "Guardar Nuevo"
         }
     }
 
@@ -153,7 +163,12 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
 		elements = JSON.parse(history[index]);
 		historyIndex = index;
 		selectedElementId = null;
-		hasUnsavedChanges = true;
+        
+        // --- FIX: BUG DE GUARDADO ---
+        // Solo marca cambios si no estamos en el estado base (índice 0)
+		hasUnsavedChanges = (index > 0);
+        // --- FIN DEL FIX ---
+
 		await tick();
 		applyingHistory = false;
 	}
@@ -274,7 +289,7 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
 				return;
             }
             nameToSave = inputName.trim();
-            // --- FETCH CORREGIDO ---
+			// --- FETCH CORREGIDO ---
             targetUrl = `${PUBLIC_API_URL}/api/activities/save`;
 			method = 'POST';
         }
@@ -294,11 +309,10 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
 				},
                 body: JSON.stringify(payload),
             });
-
-            // --- MANEJO DE ERRORES MEJORADO ---
+			// --- MANEJO DE ERRORES MEJORADO ---
             if (!response.headers.get('content-type')?.includes('application/json')) {
                  throw new Error(`Respuesta inesperada del servidor. Código: ${response.status}`);
-            }
+			}
 			const body = await response.json();
             
             if (!response.ok) {
@@ -326,7 +340,7 @@ y: 920, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left
                  errorMsg += ` ${error.message}`;
              }
              alert(errorMsg);
-        }
+		}
 	}
     
 	// IMPLEMENTACIÓN COMPLETA DE DESCARGA PDF 
