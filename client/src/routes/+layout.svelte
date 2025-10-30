@@ -12,6 +12,10 @@
   const theme = writable(null);
 
   onMount(() => {
+    // ---- AÑADIDO PARA VERIFICAR ----
+    console.log("El layout raíz (+layout.svelte) se ha cargado correctamente.");
+    // --------------------------------
+
     const savedTheme = localStorage.getItem('theme');
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
