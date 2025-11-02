@@ -6,23 +6,47 @@ import { z } from 'zod'
 import { Resend } from 'resend'
 import { randomBytes } from 'crypto'
 
-// Asegúrate que las variables de entorno existan
-if (!process.env.JWT_SECRET || !process.env.RESEND_API_KEY) {
-    throw new Error("Revisa tu archivo .env. JWT_SECRET y RESEND_API_KEY son requeridos.");
+// --- FIX DE ARRANQUE LOCAL ---
+// 1. Validamos que las variables de entorno CRÍTICAS existan
+if (!process.env.JWT_SECRET) {
+    throw new Error("ERROR CRÍTICO: Tu archivo server/.env no tiene la variable JWT_SECRET. El servidor no puede arrancar.");
 }
 
+// 2. Validamos de forma NO CRÍTICA la clave de Resend
+if (!process.env.RESEND_API_KEY) {
+    console.warn("\n**************************************************");
+    console.warn("ADVERTENCIA: RESEND_API_KEY no está definida en server/.env.");
+    console.warn("El servidor funcionará, pero el envío de correos (como 'olvidé mi contraseña') fallará.");
+    console.warn("**************************************************\n");
+}
+
+// 3. Inicializamos Resend de forma segura (o un objeto falso si no hay clave)
+const resend = process.env.RESEND_API_KEY
+    ? new Resend(process.env.RESEND_API_KEY)
+    : { emails: { send: async () => { 
+        console.error("ERROR: Se intentó enviar un email pero RESEND_API_KEY no está configurada.");
+        return { error: { message: "Servicio de email no configurado" } }; 
+    }}};
+// --- FIN DEL FIX DE ARRANQUE ---
+
+
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:1234@localhost:5432/dua_conecta_db'
+
+// FIX: Desactiva SSL automáticamente si la conexión es a 'localhost'
+const isLocalConnection = DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1');
+
+console.log(`Conectando a PostgreSQL... (SSL ${isLocalConnection ? 'desactivado para local' : 'activado para producción'})`);
+
+// Configuración de la base de datos con el SSL condicional
 const sql = postgres(DATABASE_URL, {
-  ssl: 'require' // Forza el uso de SSL/TLS
+  ssl: isLocalConnection ? false : 'require' // SSL solo si NO es local
 })
+
 console.log('PostgreSQL conectado y listo.')
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 const app = new Elysia()
    .use(cors({
-    // ¡CAMBIO IMPORTANTE AQUÍ!
-    // Reemplaza '<TU_URL_DE_VERCEL>' con tu URL real (ej: 'https://dua-conecta.vercel.app')
         origin: ['http://localhost:5173', 'https://dua-conecta-j1pn.vercel.app'], 
         methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
@@ -40,7 +64,7 @@ const app = new Elysia()
             const profile = await jwt.verify(token);
             return { profile };
         } catch (error) {
-            console.warn("Verificación de JWT fallida:", error.message) // Log si el token es inválido
+            console.warn("Verificación de JWT fallida:", (error as Error).message) // Log si el token es inválido
             return { profile: null }
         }
     })
@@ -99,11 +123,18 @@ const app = new Elysia()
                         const expiresAt = new Date(Date.now() + 1000 * 60 * 15); // 15 min
                         await sql`INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (${user.id}, ${token}, ${expiresAt})`
                         const resetLink = `http://localhost:5173/reset-password?token=${token}`;
-                        await resend.emails.send({
+                        
+                        // Intenta enviar el email
+                        const { error } = await resend.emails.send({
                             from: 'onboarding@resend.dev', to: email,
                             subject: 'Recuperación de Contraseña - DUA-Conecta',
                             html: `<p>Haz clic <a href="${resetLink}">aquí</a> para resetear. Expira en 15 min.</p>`
                         });
+
+                        if(error) {
+                            console.error("Error al enviar email de reseteo:", error.message);
+                            // No le decimos al usuario que falló, por seguridad.
+                        }
                     }
                     set.status = 200; return { success: true, message: 'Si el correo existe, recibirás un enlace.' };
                 } catch (error) {
@@ -184,7 +215,7 @@ const app = new Elysia()
                 // Insertamos y retornamos el ID de la nueva actividad
                 const [newActivity] = await sql`
                     INSERT INTO saved_activities (user_id, name, template_id, elements)
-                    VALUES (${userId}, ${name}, ${templateId}, ${JSON.stringify(elements)})
+                    VALUES (${userId}, ${name}, ${templateId}, ${elements})
                     RETURNING id
                 `;
                 
@@ -257,7 +288,7 @@ const app = new Elysia()
                 const [updatedActivity] = await sql`
                     UPDATE saved_activities
                     SET name = ${name}, 
-                        elements = ${JSON.stringify(elements)},
+                        elements = ${elements},
                         template_id = ${templateId},
                         updated_at = NOW()
                     WHERE id = ${activityId} AND user_id = ${userId}
