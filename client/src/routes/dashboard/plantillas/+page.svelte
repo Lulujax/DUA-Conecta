@@ -1,5 +1,61 @@
 <script lang="ts">
-    // No se necesita lógica aquí por ahora
+    // --- 1. ESTADO DE LA PÁGINA ---
+    
+    // Lista maestra con todas las plantillas
+    const allTemplates = [
+        {
+            id: 1,
+            href: '/editor/1',
+            title: 'El Monstruo de las Emociones',
+            category: 'Conducta',
+            thumbnailSrc: '/thumbnail-monstruo.jpg',
+            alt: 'Miniatura Monstruo Emociones'
+        },
+        {
+            id: 2,
+            href: '/editor/2',
+            title: 'Emociones con Lupa',
+            category: 'Conducta',
+            thumbnailSrc: '/thumbnail-lupa.jpg',
+            alt: 'Miniatura Emociones con Lupa'
+        },
+        {
+            id: 3,
+            href: '/editor/3',
+            title: '¿Cómo te ayudo?',
+            category: 'Conducta',
+            thumbnailSrc: '/thumbnail-ayuda.jpg',
+            alt: 'Miniatura ¿Como te ayudo?'
+        },
+        // --- *** NUEVA PLANTILLA AÑADIDA *** ---
+        {
+            id: 4,
+            href: '/editor/4',
+            title: 'El Dado de las Historias',
+            category: 'Lectoescritura',
+            thumbnailSrc: '', // Dejamos esto vacío hasta que nos envíes la miniatura
+            alt: 'Miniatura Dado de Historias'
+        }
+        // --- *** FIN DE LA NUEVA PLANTILLA *** ---
+    ];
+
+    // Categorías para los botones de filtro
+    const filterCategories = ['Todas', 'Conducta', 'Matemáticas', 'Lectoescritura'];
+
+    // --- 2. LÓGICA DE FILTRADO ---
+    
+    let selectedCategory = $state('Todas');
+
+    let filteredTemplates = $derived(
+        selectedCategory === 'Todas'
+            ? allTemplates
+            : allTemplates.filter(t => t.category === selectedCategory)
+    );
+
+    function setFilter(category: string) {
+        selectedCategory = category;
+    }
+
 </script>
 
 <svelte:head>
@@ -17,45 +73,53 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" placeholder="Buscar plantillas por nombre, tema, habilidad..." />
       </div>
+       
        <div class="filters">
-          <button class="active">Todas</button>
-          <button>Matemáticas</button>
-          <button>Lectoescritura</button>
-          <button>Sociales</button>
-      </div>
+            {#each filterCategories as category (category)}
+                <button 
+                    class:active={selectedCategory === category}
+                    on:click={() => setFilter(category)}
+                >
+                    {category}
+                </button>
+            {/each}
+        </div>
   </div>
 
   <div class="template-grid">
-      <a href="/editor/1" class="template-card">
-          <div class="thumbnail">
-             <span>(Miniatura Monstruo Emociones)</span>
-          </div>
-          <div class="card-content">
-              <h4>El Monstruo de las Emociones</h4>
-              <p>Habilidades Sociales</p>
-          </div>
-      </a>
-      
-      <a href="/editor/2" class="template-card">
-          <div class="thumbnail">
-             <img src="/thumbnail-lupa.jpg" alt="Miniatura Emociones con Lupa" class="thumbnail-image" />
-          </div>
-          <div class="card-content">
-              <h4>Emociones con Lupa</h4>
-              <p>Habilidades Sociales</p>
-          </div>
-      </a>
+      {#each filteredTemplates as template (template.id)}
+          <a href={template.href} class="template-card">
+              <div class="thumbnail">
+                  {#if template.thumbnailSrc}
+                      <img 
+                          src={template.thumbnailSrc} 
+                          alt={template.alt} 
+                          class="thumbnail-image" 
+                      />
+                  {:else}
+                    <span class="thumbnail-placeholder">{template.title}</span>
+                  {/if}
+              </div>
+              <div class="card-content">
+                  <h4>{template.title}</h4>
+                  <p>{template.category}</p>
+              </div>
+          </a>
+      {/each}
+  </div>
 
-      <a href="/editor/3" class="template-card">
-          <div class="thumbnail">
-             <img src="/thumbnail-ayuda.jpg" alt="Miniatura ¿Como te ayudo?" class="thumbnail-image" />
-          </div>
-          <div class="card-content">
-              <h4>¿Cómo te ayudo?</h4>
-              <p>Resolución de Conflictos</p>
-          </div>
-      </a>
+  {#if filteredTemplates.length === 0}
+      <div class="empty-state-wrapper section visible" style="animation: none;">
+          <div class="empty-state-icon">🧐</div>
+          <h2>No se encontraron plantillas</h2>
+          <p>
+              Actualmente no hay plantillas en la categoría <strong>"{selectedCategory}"</strong>.
+              <br>
+              ¡Vuelve pronto!
+          </p>
       </div>
+  {/if}
+
 </main>
 
 <style>
@@ -65,21 +129,37 @@
         padding: 4rem 1.5rem;
     }
 
-    /* --- ESTILOS PARA LAS NUEVAS IMÁGENES DE MINIATURA --- */
+    .filters {
+        display: flex;
+        flex-wrap: wrap; 
+        gap: 0.75rem; /* Espacio entre botones */
+    }
+
     .thumbnail {
-        /* (Estilos existentes de app.css) */
-        overflow: hidden; /* Asegura que la imagen no se salga */
+        overflow: hidden; 
+        background-color: var(--bg-section);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        /* --- AÑADIDO PARA LOS PLACEHOLDERS --- */
+        padding: 1rem;
+        aspect-ratio: 4 / 3; /* Asegura que todos tengan el mismo alto */
+        box-sizing: border-box;
+    }
+    .thumbnail-placeholder {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-light);
     }
     .thumbnail-image {
         width: 100%;
         height: 100%;
-        object-fit: cover; /* Cubre el área sin distorsionar */
-        object-position: top center; /* Se enfoca en la parte de arriba */
+        object-fit: cover; 
+        object-position: top center; 
         transition: transform 0.4s ease;
     }
     .template-card:hover .thumbnail-image {
-        transform: scale(1.05); /* Sutil efecto de zoom */
+        transform: scale(1.05); 
     }
-    
-    /* (El resto de estilos se cargan desde app.css) */
 </style>
