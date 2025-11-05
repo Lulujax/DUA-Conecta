@@ -3,6 +3,10 @@
 /* ======================== */
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
 
+/* --- *** LÍNEA NUEVA AÑADIDA (Paso 2.3) *** --- */
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;700&display=swap');
+
+
 /* --- TEMA CLARO (POR DEFECTO) --- */
 :root {
   --primary-color: #A084E8;

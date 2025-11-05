@@ -27,16 +27,24 @@
             thumbnailSrc: '/thumbnail-ayuda.jpg',
             alt: 'Miniatura ¿Como te ayudo?'
         },
-        // --- *** NUEVA PLANTILLA AÑADIDA *** ---
         {
             id: 4,
             href: '/editor/4',
             title: 'El Dado de las Historias',
             category: 'Lectoescritura',
-            thumbnailSrc: '', // Dejamos esto vacío hasta que nos envíes la miniatura
+            thumbnailSrc: '/thumbnail-dado.jpg', 
             alt: 'Miniatura Dado de Historias'
+        },
+        // --- *** PLANTILLA 5 AÑADIDA (Paso 3.2) *** ---
+        {
+            id: 5,
+            href: '/editor/5',
+            title: 'BINGO de Palabras',
+            category: 'Lectoescritura',
+            thumbnailSrc: '/thumbnail-bingo.jpg', // La miniatura que subiste
+            alt: 'Miniatura BINGO de Palabras'
         }
-        // --- *** FIN DE LA NUEVA PLANTILLA *** ---
+        // --- *** FIN DE LA PLANTILLA 5 *** ---
     ];
 
     // Categorías para los botones de filtro
@@ -73,7 +81,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" placeholder="Buscar plantillas por nombre, tema, habilidad..." />
       </div>
-       
+        
        <div class="filters">
             {#each filterCategories as category (category)}
                 <button 

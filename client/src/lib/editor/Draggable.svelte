@@ -177,6 +177,8 @@
 	// --- EDICIÓN DE TEXTO ---
 	function handleInput(_e: Event) {
 		if (applyingLocal) return;
+		// no emitimos cambios continuos;
+		// guardado final en blur
 	}
 
 	function handleBlur() {
@@ -207,6 +209,9 @@
 		if (wrapperRef) wrapperRef.removeEventListener('toggle-list', onToggleListEvent as EventListener);
 	});
 
+	/**
+	 * toggleList: envuelve o desarrolla la línea/bloque actual dentro de UL/OL
+	 */
 	async function toggleList(listType: 'ul' | 'ol') {
 		if (!textElementRef) return;
 		applyingLocal = true;
@@ -224,6 +229,7 @@
 		}
 		if (!textElementRef.contains(anchorNode)) { textElementRef.focus(); applyingLocal = false; return; }
 
+		// encontrar bloque
 		let node: Node | null = anchorNode;
 		while (node && node !== textElementRef && node.parentElement !== textElementRef) node = node.parentNode;
 		let blockElement: HTMLElement;
@@ -234,12 +240,15 @@
 
 		const parent = blockElement.parentElement;
 		if (parent && (parent.tagName.toLowerCase() === 'ul' || parent.tagName.toLowerCase() === 'ol') && blockElement.tagName.toLowerCase() === 'li') {
+			// unwrap: reemplazar li por su contenido y eliminar lista si queda vacía
 			const fragment = document.createDocumentFragment();
 			while (blockElement.firstChild) fragment.appendChild(blockElement.firstChild);
 			parent.parentElement?.insertBefore(fragment, parent);
 			if (parent.childElementCount === 0) parent.remove();
 		} else {
+			// wrap into list
 			const list = document.createElement(listType === 'ul' ? 'ul' : 'ol');
+			// si el bloque es textElementRef, manejar múltiples nodos
 			if (blockElement === textElementRef) {
 				const children = Array.from(textElementRef.childNodes);
 				if (children.length === 1) {
@@ -265,6 +274,7 @@
 			}
 		}
 
+		// colocar caret al final de la lista modificada
 		const range = document.createRange();
 		const selection = window.getSelection();
 		if (textElementRef.lastChild) {
@@ -274,6 +284,7 @@
 			selection?.addRange(range);
 		}
 
+		// guardar final
 		onUpdate(element.id, { content: textElementRef.innerHTML }, true);
 		setTimeout(() => { applyingLocal = false; }, 0);
 	}
@@ -284,8 +295,9 @@
 		const strokeWidth = el.strokeWidth || 4;
 		const w = el.width || 100;
 		const h = el.height || 20;
-		const halfH = Math.max(1, strokeWidth / 2);
+
 		if (el.shapeType === 'line') {
+			const halfH = Math.max(1, strokeWidth / 2);
 			const svg = `<svg width="${w}" height="${Math.max(halfH, strokeWidth)}" viewBox="0 0 ${w} ${Math.max(halfH, strokeWidth)}" xmlns="http://www.w3.org/2000/svg">
 				<line x1="0" y1="${Math.max(halfH, strokeWidth)/2}" x2="${w}" y2="${Math.max(halfH, strokeWidth)/2}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round"/>
 			</svg>`;
@@ -307,7 +319,14 @@
 				<circle cx="${cx}" cy="${cy}" r="${r}" stroke="${stroke}" stroke-width="${strokeWidth}" fill="${el.fill || 'transparent'}" />
 			</svg>`;
 			return svg;
+		
+		} else if (el.shapeType === 'rectangle') {
+			const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+				<rect x="0" y="0" width="${w}" height="${h}" stroke="${stroke}" stroke-width="${strokeWidth}" fill="${el.fill || 'transparent'}" />
+			</svg>`;
+			return svg;
 		}
+
 		return '';
 	}
 </script>
@@ -318,7 +337,7 @@
 	class="draggable-wrapper"
 	class:selected={isSelected && !isEditing}
 	class:editing={isEditing}
-	style:transform="translate({element.x}px, {element.y}px) rotate({element.rotation || 0}deg)"
+	style:transform="translate({element.x}px, {element.y}px)"
 	style:width="{element.width}px"
 	style:height="{element.type === 'image' ? element.height + 'px' : element.type === 'shape' && element.shapeType === 'circle' ? element.height + 'px' : (element.height ? element.height + 'px' : 'auto')}"
 	style:min-height="{element.type === 'text' ? '1.2em' : 'auto'}"
@@ -342,6 +361,9 @@
 			style:font-style={element.isItalic ? 'italic' : 'normal'}
 			style:text-decoration={element.isUnderlined ? 'underline' : 'none'}
 			style:text-align={element.textAlign || 'left'}
+			
+			style:line-height={element.lineHeight || 1.4}
+			
 			contenteditable={isEditing ? 'true' : 'false'}
 			oninput={handleInput}
 			onmousedown={(e) => { if (!isEditing) onDragStart(e); else e.stopPropagation(); }}
@@ -352,74 +374,61 @@
 		>
 			{@html element.content}
 		</div>
-	{:else if element.type === 'shape'}
+		{:else if element.type === 'shape'}
 		<div class="element-content shape-content"
 			style:width={element.width + 'px'}
 			style:height={element.shapeType === 'circle' ? element.height + 'px' : (element.height ? element.height + 'px' : 'auto')}
+			style:transform={`rotate(${element.rotation || 0}deg)`}
 			>
 			{@html renderShapeSVG(element)}
 		</div>
-	{/if}
 
-    {#if element.type !== 'text'}
 		<div class="rotate-handle" onmousedown={onRotateStart} title="Rotar"></div>
-    {/if}
+	{/if}
 
 	<div class="resize-handle" onmousedown={onResizeStart}></div>
 </div>
 
 <style>
-	.draggable-wrapper { 
-        position: absolute;
-        cursor: grab; 
-        border: 1px dashed transparent; 
-        transition: border-color 0.2s ease, box-shadow 0.2s ease; 
-        user-select: none; 
-        box-sizing: border-box;
-        contain: layout style paint; 
-        transform-origin: center;
-    }
-	.draggable-wrapper:hover:not(.editing) { border-color: rgba(160, 132, 232, 0.5); box-shadow: 0 0 0 1px rgba(160, 132, 232, 0.3);
-	}
-	.draggable-wrapper.selected { border: 1px solid var(--primary-color, #A084E8); box-shadow: 0 0 0 1px var(--primary-color, #A084E8);
-	}
+	.draggable-wrapper { position: absolute; cursor: grab; border: 1px dashed transparent; transition: border-color 0.2s ease, box-shadow 0.2s ease; user-select: none; box-sizing: border-box; contain: layout style paint; }
+	.draggable-wrapper:hover:not(.editing) { border-color: rgba(160, 132, 232, 0.5); box-shadow: 0 0 0 1px rgba(160, 132, 232, 0.3); }
+	.draggable-wrapper.selected { border: 1px solid var(--primary-color, #A084E8); box-shadow: 0 0 0 1px var(--primary-color, #A084E8); }
 	.draggable-wrapper.editing { border: 1px solid var(--primary-color, #A084E8); cursor: text; box-shadow: none; }
-	.element-content { width: 100%; height: 100%; display: block;
-	box-sizing: border-box; position: relative; }
-	
-    .image-content { 
-        /* *** CAMBIO CLAVE: De 'fill' a 'contain' *** */
-        /* Esto respeta la forma de la imagen (solapas, iconos) y no las deforma */
-        object-fit: contain; 
-        pointer-events: none; 
-    }
-	
-    .text-content { pointer-events: auto; cursor: default; overflow-wrap: break-word; word-break: break-word;
-	white-space: pre-wrap; outline: none; padding: 2px 4px; min-height: 1.2em; height: auto; line-height: 1.4; }
-	.text-content[contenteditable="true"] { cursor: text;
+	.element-content { width: 100%; height: 100%; display: block; box-sizing: border-box; position: relative; }
+	.image-content { object-fit: contain; pointer-events: none; }
+
+	/* --- MODIFICACIÓN: La altura de línea por defecto (1.4) se movió al script --- */
+	.text-content { 
+		pointer-events: auto; 
+		cursor: default; 
+		overflow-wrap: break-word; 
+		word-break: break-word; 
+		white-space: pre-wrap; 
+		outline: none; 
+		padding: 2px 4px; 
+		min-height: 1.2em; 
+		height: auto; 
+		line-height: 1.4; /* Esta es la altura de línea por defecto */
 	}
+	/* --- FIN DE LA MODIFICACIÓN --- */
+	
+	.text-content[contenteditable="true"] { cursor: text; }
 	.text-content:focus { box-shadow: 0 0 0 2px rgba(160, 132, 232, 0.3); outline: none; }
-	.text-content[contenteditable="false"] { cursor: grab; pointer-events: auto;
-	}
+	.text-content[contenteditable="false"] { cursor: grab; pointer-events: auto; }
 
-	.resize-handle { position: absolute; bottom: -6px; right: -6px; width: 12px; height: 12px; background: var(--primary-color, #A084E8);
-	border: 1.5px solid white; border-radius: 50%; cursor: nwse-resize; box-shadow: 0 1px 3px rgba(0,0,0,0.4); z-index: 1001; opacity: 0;
-	transition: opacity 0.2s ease; pointer-events: none; }
-	.draggable-wrapper:hover:not(.editing) .resize-handle, .draggable-wrapper.selected .resize-handle { opacity: 1; pointer-events: auto;
-	}
+	/* Resize handle bottom-right */
+	.resize-handle { position: absolute; bottom: -6px; right: -6px; width: 12px; height: 12px; background: var(--primary-color, #A084E8); border: 1.5px solid white; border-radius: 50%; cursor: nwse-resize; box-shadow: 0 1px 3px rgba(0,0,0,0.4); z-index: 1001; opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
+	.draggable-wrapper:hover:not(.editing) .resize-handle, .draggable-wrapper.selected .resize-handle { opacity: 1; pointer-events: auto; }
 
-	.rotate-handle { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); width: 12px; height: 12px;
-	background: #fff; border: 2px solid var(--primary-color, #A084E8); border-radius: 50%; cursor: grab; z-index: 1002; display: none; }
-	
-    /* *** CAMBIO: Se muestra en 'selected' para todos (no solo 'shape') *** */
-    .draggable-wrapper.selected .rotate-handle { display: block;
-	}
+	/* Rotation handle - top center */
+	.rotate-handle { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); width: 12px; height: 12px; background: #fff; border: 2px solid var(--primary-color, #A084E8); border-radius: 50%; cursor: grab; z-index: 1002; display: none; }
+	.draggable-wrapper.selected .rotate-handle { display: block; }
 
-	.shape-content { display:flex; align-items:center; justify-content:center; overflow: visible; pointer-events: none;
-	}
+	/* styles for shape svg wrapper to keep it visually centered */
+	.shape-content { display:flex; align-items:center; justify-content:center; overflow: visible; pointer-events: none; }
 
-	.text-content ul, .text-content ol { margin: 0.5em 0; padding-left: 1.5em; list-style-position: outside;
-	color: inherit; }
+	/* estilos para listas dentro del editable */
+	.text-content ul, .text-content ol { margin: 0.5em 0; padding-left: 1.5em; list-style-position: outside; color: inherit; }
 	.text-content ul { list-style-type: disc; }
 	.text-content ol { list-style-type: decimal; }
 </style>
