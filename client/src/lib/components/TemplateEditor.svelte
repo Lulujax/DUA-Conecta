@@ -46,9 +46,7 @@
 		else horizontalSnapLine = line.position;
 	}
 
-    // --- *** LÓGICA DE FASE 1 (YA HECHA) *** ---
-    // Variable para controlar la pestaña activa de la barra lateral
-	let activePanel = $state('texto'); // 'texto', 'formas', o 'subir'
+    // (La variable 'activePanel' de la fase anterior ha sido eliminada)
 
 	// --- FUENTES DISPONIBLES ---
 	const availableFonts = ['Arial', 'Verdana', 'Times New Roman', 'Courier New', 'Georgia', 'Comic Sans MS', 'Anton', 'Oswald'];
@@ -375,32 +373,19 @@
 			<button class="icon-button" onclick={redo} disabled={!canRedo} title="Rehacer (Ctrl+Y)"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></button>
 		</div>
         
-        <div class="panel-nav">
-            <button class="panel-tab" class:active={activePanel === 'texto'} on:click={() => activePanel = 'texto'}>Texto</button>
-            <button class="panel-tab" class:active={activePanel === 'formas'} on:click={() => activePanel = 'formas'}>Formas</button>
-            <button class="panel-tab" class:active={activePanel === 'subir'} on:click={() => activePanel = 'subir'}>Subir</button>
-        </div>
+        <div class="tool-section add-panel">
+			<h3>Añadir</h3>
+			<button class="add-panel-button" onclick={addText}>+ Texto</button>
+			<label for="image-upload" class="add-panel-button btn-upload">+ Imagen</label>
+			<input type="file" id="image-upload" accept="image/*" onchange={handleFileInput} />
+			
+            <div class="add-panel-separator"></div>
 
-        <div class="panel-content tool-section">
-            {#if activePanel === 'texto'}
-                <h3>Texto</h3>
-                <button class="btn-secondary" onclick={addText}>+ Añadir Texto</button>
-            
-            {:else if activePanel === 'formas'}
-                <h3>Formas</h3>
-                <div class="shape-grid">
-                    <button class="btn-secondary shape-btn" onclick={() => addShape('rectangle')}>+ Rectángulo</button>
-                    <button class="btn-secondary shape-btn" onclick={() => addShape('circle')}>+ Círculo</button>
-                    <button class="btn-secondary shape-btn" onclick={() => addShape('line')}>+ Línea</button>
-                    <button class="btn-secondary shape-btn" onclick={() => addShape('arrow')}>+ Flecha</button>
-                </div>
-            
-            {:else if activePanel === 'subir'}
-                <h3>Subir</h3>
-                <label for="image-upload" class="btn-secondary btn-upload">+ Imagen</label>
-                <input type="file" id="image-upload" accept="image/*" onchange={handleFileInput} style="display: none;" />
-            {/if}
-        </div>
+            <button class="add-panel-button" onclick={() => addShape('flecha')}>+ Flecha</button>
+			<button class="add-panel-button" onclick={() => addShape('line')}>+ Línea</button>
+			<button class="add-panel-button" onclick={() => addShape('circle')}>+ Círculo</button>
+			<button class="add-panel-button" onclick={() => addShape('rectangle')}>+ Rectángulo</button>
+		</div>
         {#if selectedElement}
 			<div class="tool-section">
 				<h3>Seleccionado</h3>
@@ -506,6 +491,7 @@
 </main>
 
 <style>
+    /* ... (Todos los estilos existentes de Fase 1) ... */
 	.editor-layout { display: flex; height: 100vh; overflow: hidden; }
 	.editor-sidebar { width: 280px; flex-shrink: 0; background-color: var(--bg-card); border-right: 1px solid var(--border-color); padding: 1.5rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
 	.back-button { text-decoration: none; color: var(--text-light); font-weight: 600; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0rem; transition: color 0.2s ease; }
@@ -517,13 +503,60 @@
 	.icon-button:hover:not(:disabled) { border-color: var(--primary-color); color: var(--primary-color); background-color: transparent; }
 	.icon-button:disabled { opacity: 0.5; cursor: not-allowed; }
 	.tool-section h3 { font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); }
-	.editor-sidebar button:not(.icon-button), .editor-sidebar .btn-upload { width: 100%; text-align: center; padding: 0.6rem 1rem; font-size: 0.85rem; margin-bottom: 0.5rem; }
+	
+    /* --- *** INICIO DEL CAMBIO (CSS) *** --- */
+    /* (Se eliminan los estilos antiguos de .btn-secondary y .btn-upload de la barra lateral) */
+    
+    .add-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem; /* Espacio entre botones */
+    }
+    .add-panel-button {
+        display: flex; /* Cambiado a flex para centrar */
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        margin: 0; /* Reseteo de margen */
+        font-size: 0.9rem;
+        font-weight: 600;
+        
+        /* Estilos de tu captura de pantalla */
+        background-color: var(--bg-card);
+        color: var(--text-light);
+        border: 2px solid var(--border-color); /* Borde sutil */
+        border-radius: 50px; /* Completamente redondeado */
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .add-panel-button:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        background-color: var(--bg-section); /* Ligero fondo al pasar el ratón */
+    }
+    .add-panel-separator {
+        height: 1px;
+        background-color: var(--border-color);
+        margin: 0.5rem 0;
+    }
+    /* --- *** FIN DEL CAMBIO (CSS) *** --- */
+
 	.editor-sidebar input[type="file"] { display: none; }
 	.prop-label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); margin-top: 0.8rem; margin-bottom: 0.3rem; display: block; }
 	.btn-delete { background-color: #f15e5e; color: white; border-color: #f15e5e; margin-top: 1rem; }
 	.btn-delete:hover { background-color: #e53e3e; border-color: #e53e3e; }
 	.actions { margin-top: auto; padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
-	.actions button:first-child { margin-bottom: 0.75rem; }
+	/* Estilos de botones de Acciones (Guardar, PDF) se mantienen */
+    .actions .btn-secondary, .actions .btn-primary {
+        width: 100%;
+        text-align: center;
+        padding: 0.6rem 1rem;
+        font-size: 0.85rem;
+        margin: 0 0 0.75rem 0;
+    }
+    
+    /* ... (resto de estilos del editor, canvas, etc. se mantienen igual) ... */
     .editor-main-area { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; background-color: var(--bg-section); }
     .text-toolbar { position: absolute; top: 1rem; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.5rem; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 1001; white-space: nowrap; }
     .toolbar-select, .toolbar-input { padding: 0.2rem 0.4rem; border-radius: 4px; border: 1px solid var(--border-color); background-color: var(--bg-section); color: var(--text-dark); font-size: 0.75rem; height: 28px; box-sizing: border-box; outline: none; }
@@ -564,60 +597,8 @@
     .font-size-control .icon-button:disabled { opacity: 0.4; }
     .font-size-control .icon-button svg { width: 16px; height: 16px; }
     .font-size-input { width: 35px; text-align: center; margin: 0; padding: 0.2rem; border: none; height: 26px; background-color: transparent; }
-	.btn-secondary { display:inline-block; padding:0.5rem 0.8rem; margin-right:4px; margin-top:6px; }
 	.icon-button { width: 32px; height: 32px; display:flex; align-items:center; justify-content:center; }
 	.color-indicator { width: 24px; height: 18px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.08); }
 
-    /* --- *** INICIO DE ESTILOS (FASE 2) *** --- */
-    .panel-nav {
-        display: flex;
-        justify-content: space-between;
-        border-bottom: 1px solid var(--border-color);
-        margin-bottom: 1rem;
-    }
-    .panel-tab {
-        flex: 1;
-        padding: 0.75rem 0.5rem;
-        background-color: transparent;
-        border: none;
-        border-bottom: 3px solid transparent;
-        cursor: pointer;
-        color: var(--text-light);
-        font-weight: 600;
-        font-family: var(--font-main);
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        margin-bottom: -1px; /* Para que el borde se alinee con el borde inferior */
-    }
-    .panel-tab:hover {
-        color: var(--text-dark);
-    }
-    .panel-tab.active {
-        color: var(--primary-color);
-        border-bottom-color: var(--primary-color);
-    }
-    /* Quitamos bordes y paddings extra de tool-section cuando está dentro de un panel */
-    .panel-content.tool-section {
-        border-bottom: none;
-        padding-bottom: 0;
-        margin-bottom: 0;
-    }
-    .panel-content h3 {
-        /* El h3 de los paneles no necesita el borde inferior */
-        padding-bottom: 0;
-        border-bottom: none;
-        margin-bottom: 0.75rem;
-    }
-    .shape-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr; /* Cuadrícula de 2x2 */
-        gap: 0.5rem;
-    }
-    /* Estilo para los botones dentro de la cuadrícula de formas */
-    .shape-btn {
-        width: 100%;
-        margin: 0;
-        padding: 0.75rem 0.5rem; /* Más alto */
-    }
-    /* --- *** FIN DE ESTILOS (FASE 2) *** --- */
+    /* (Se eliminaron los estilos .panel-nav, .panel-tab, etc. de la Fase 2) */
 </style>
