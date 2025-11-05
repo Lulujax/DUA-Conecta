@@ -48,7 +48,7 @@ console.log('PostgreSQL conectado y listo.')
 const app = new Elysia()
    .use(cors({
         origin: ['http://localhost:5173', 'https://dua-conecta-j1pn.vercel.app'], 
-        methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // <-- AÑADIDO 'DELETE'
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
     }))
@@ -194,7 +194,7 @@ const app = new Elysia()
                 set.status = 500; return { error: 'Error interno del servidor.' };
             }
         })
-        // --- RUTA PARA CREAR/GUARDAR NUEVA ACTIVIDAD ---
+        // --- RUTA PARA CREAR/GUARDAR NUEVA ACTIVIDAD (MODIFICADA) ---
         .post('/activities/save', async ({ profile, body, set }) => {
             const userId = (profile as any).userId;
             const ActivitySchema = z.object({
@@ -212,10 +212,10 @@ const app = new Elysia()
             const { name, templateId, elements } = validation.data;
             
             try {
-                // Insertamos y retornamos el ID de la nueva actividad
+                // *** CAMBIO (Goal 1): Añadido created_at y updated_at ***
                 const [newActivity] = await sql`
-                    INSERT INTO saved_activities (user_id, name, template_id, elements)
-                    VALUES (${userId}, ${name}, ${templateId}, ${elements})
+                    INSERT INTO saved_activities (user_id, name, template_id, elements, created_at, updated_at)
+                    VALUES (${userId}, ${name}, ${templateId}, ${elements}, NOW(), NOW())
                     RETURNING id
                 `;
                 
@@ -303,6 +303,29 @@ const app = new Elysia()
                 console.error("Error al actualizar actividad:", error);
                 set.status = 500;
                 return { error: 'Error interno del servidor al actualizar la actividad.' };
+            }
+        })
+        // *** NUEVA RUTA (Goal 3a): Eliminar una actividad ***
+        .delete('/activities/:id', async ({ profile, params, set }) => {
+            const userId = (profile as any).userId;
+            const activityId = parseInt(params.id);
+            if (isNaN(activityId)) { set.status = 400; return { error: 'ID de actividad inválido.' } }
+
+            try {
+                const [deletedActivity] = await sql`
+                    DELETE FROM saved_activities
+                    WHERE id = ${activityId} AND user_id = ${userId}
+                    RETURNING id
+                `;
+                
+                if (!deletedActivity) { set.status = 404; return { error: 'Actividad no encontrada o no pertenece al usuario.' } }
+
+                set.status = 200;
+                return { success: true, message: 'Actividad eliminada con éxito.' };
+            } catch (error) {
+                console.error("Error al eliminar actividad:", error);
+                set.status = 500;
+                return { error: 'Error interno del servidor al eliminar la actividad.' };
             }
         })
     )
