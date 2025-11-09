@@ -1,5 +1,5 @@
 <script lang="ts">
-	// --- IMPORTS ---
+	import { tick } from 'svelte';
 	import { user } from '../../stores/auth';
 	import { editorStore } from '../../editor/editor.store.svelte';
 	import { apiService } from '../../editor/apiService';
@@ -11,8 +11,36 @@
 	}>();
 
 	async function handleDownloadPdf() {
+		// --- *** INICIO DEL CAMBIO (Prompt de Nombre) *** ---
+
+		// 1. Obtenemos el nombre actual como sugerencia
+		const currentName = editorStore.activityName;
+
+		// 2. Preguntamos al usuario por el nombre deseado
+		const newName = prompt("Ingresa el nombre para tu archivo PDF:", currentName);
+
+		// 3. Si el usuario presiona "Cancelar" (newName es null) o deja el campo vacío
+		if (!newName || newName.trim() === "") {
+			alert("Descarga cancelada.");
+			return; // Detenemos la función
+		}
+
+		// 4. Limpiamos el nombre para que sea seguro para un archivo
+		// Reemplaza espacios con guiones bajos y elimina caracteres no válidos
+		const sanitizedName = newName.trim().replace(/[^a-z0-9_-\s]/gi, '').replace(/\s+/g, '_');
+		const finalFilename = `DUA-Conecta_${sanitizedName}.pdf`;
+
+		// 5. Ocultamos la selección y esperamos a que Svelte actualice
 		editorStore.deselect();
-		pdfService.downloadPdf(canvasContainerRef);
+		await tick(); 
+
+		// 6. Llamamos al servicio con el nombre final
+		await pdfService.downloadPdf(canvasContainerRef, finalFilename);
+
+		// 7. Damos la alerta de éxito aquí
+		alert('¡PDF generado con éxito!');
+
+		// --- *** FIN DEL CAMBIO *** ---
 	}
 
 	function handleFileInput(e: Event) {
@@ -68,51 +96,30 @@
 			</button>
 		</div>
 	</div>
+
 	{#if editorStore.selectedElement}
 		<div class="tool-section">
 			<h3>Seleccionado</h3>
+			
 			{#if editorStore.selectedElement.type === 'image'}
 				<p class="prop-label" style="margin-top:0;">Imagen</p>
-				<p style="font-size: 0.8rem; color: var(--text-light);">Arrastra para mover, usa la esquina para redimensionar.</p>
+				<p class="help-text">Edita la opacidad en la barra superior.</p>
 			{/if}
+
 			{#if editorStore.selectedElement.type === 'text'}
 				<p class="prop-label" style="margin-top:0;">Texto</p>
-				<p style="font-size: 0.8rem; color: var(--text-light);">Edita en la barra superior.</p>
+				<p class="help-text">Edita el estilo en la barra superior.</p>
 			{/if}
+
 			{#if editorStore.selectedElement.type === 'shape'}
 				<p class="prop-label" style="margin-top:0;">Forma</p>
-				<label style="display:flex;gap:8px;align-items:center;">
-					Tipo:
-					<select value={editorStore.selectedElement.shapeType} onchange={(e) => editorStore.updateSelectedElement({ shapeType: (e.currentTarget as HTMLSelectElement).value }, true)}>
-						<option value="arrow">Flecha</option>
-						<option value="line">Línea</option>
-						<option value="circle">Círculo</option>
-						<option value="rectangle">Rectángulo</option>
-					</select>
-				</label>
-				<label style="display:flex;gap:8px;align-items:center;margin-top:6px;">
-					Color (Borde):
-					<input type="color" value={editorStore.selectedElement.stroke || '#000000'} oninput={(e) => editorStore.updateSelectedElement({ stroke: (e.currentTarget as HTMLInputElement).value }, true)} />
-				</label>
-				{#if editorStore.selectedElement.shapeType === 'rectangle' || editorStore.selectedElement.shapeType === 'circle'}
-					<label style="display:flex;gap:8px;align-items:center;margin-top:6px;">
-						Color (Relleno):
-						<input type="color" value={editorStore.selectedElement.fill || '#EEEEEE'} oninput={(e) => editorStore.updateSelectedElement({ fill: (e.currentTarget as HTMLInputElement).value }, true)} />
-					</label>
-				{/if}
-				<label style="display:flex;gap:8px;align-items:center;margin-top:6px;">
-					Grosor:
-					<input type="number" min="1" max="40" value={editorStore.selectedElement.strokeWidth || 4} onchange={(e) => editorStore.updateSelectedElement({ strokeWidth: parseInt((e.currentTarget as HTMLInputElement).value) || 1 }, true)} />
-				</label>
-				<label style="display:flex;gap:8px;align-items:center;margin-top:6px;">
-					Rotación:
-					<input type="range" min="0" max="360" value={editorStore.selectedElement.rotation || 0} oninput={(e) => editorStore.updateSelectedElement({ rotation: parseInt((e.currentTarget as HTMLInputElement).value) || 0 }, false)} onchange={(e) => editorStore.updateSelectedElement({ rotation: parseInt((e.currentTarget as HTMLInputElement).value) || 0 }, true)} />
-					<span style="width:36px;text-align:center">{editorStore.selectedElement.rotation || 0}°</span>
-				</label>
+				<p class="help-text">Edita los colores y grosor en la barra superior.</p>
 			{/if}
+
 			<button class="btn-secondary btn-delete" onclick={editorStore.deleteSelected} title="Eliminar (Supr/Borrar)">Eliminar</button>
 		</div>
 	{/if}
+
 
 	<div class="tool-section actions">
 		<h3>Acciones</h3>
@@ -136,7 +143,7 @@
 		width: 280px; 
 		flex-shrink: 0; 
 		background-color: var(--bg-card); 
-		border-right: 1px solid var(--border-color); 
+		border-right: 1px solid var(--border-color);
 		padding: 1.5rem; 
 		overflow-y: auto; 
 		display: flex; 
@@ -147,14 +154,14 @@
 		text-decoration: none; 
 		color: var(--text-light); 
 		font-weight: 600; 
-		display: flex; 
+		display: flex;
 		align-items: center; 
 		gap: 0.5rem; 
 		margin-bottom: 0rem; 
 		transition: color 0.2s ease; 
 	}
     .back-button svg { 
-		flex-shrink: 0; 
+		flex-shrink: 0;
 		fill: none; 
 		stroke: currentColor; 
 		stroke-width: 2; 
@@ -164,7 +171,7 @@
 	.back-button:hover { color: var(--primary-color); }
 	.history-controls { 
 		display: flex; 
-		gap: 0.5rem; 
+		gap: 0.5rem;
 		border-bottom: 1px solid var(--border-color); 
 		padding-bottom: 1rem; 
 	}
@@ -174,7 +181,7 @@
 		display: flex; 
 		justify-content: center; 
 		align-items: center; 
-		padding: 0; 
+		padding: 0;
 		background-color: var(--bg-section); 
 		border: 1px solid var(--border-color); 
 		color: var(--text-light); 
@@ -199,23 +206,16 @@
 	}
 	.icon-button:disabled { opacity: 0.5; cursor: not-allowed; }
 	.tool-section h3 { 
-		font-size: 1rem; 
+		font-size: 1rem;
 		font-weight: 700; 
 		color: var(--text-dark); 
 		margin: 0 0 1rem 0; 
 		padding-bottom: 0.5rem; 
-		border-bottom: 1px solid var(--border-color); 
-	}
-	
-    /* --- *** INICIO CSS MEJORA ESTÉTICA *** --- */
-	/* Eliminamos los estilos antiguos */
-    .add-panel-button, .add-panel-separator {
-		display: none;
+		border-bottom: 1px solid var(--border-color);
 	}
 	
 	.tool-grid {
 		display: grid;
-		/* 3 columnas de tamaño flexible, con un mínimo de 60px */
 		grid-template-columns: repeat(3, minmax(60px, 1fr));
 		gap: 0.5rem;
 	}
@@ -243,39 +243,40 @@
 		background-color: var(--bg-section);
 	}
 	.tool-icon {
-		font-size: 1.25rem; /* Tamaño del emoji/icono */
+		font-size: 1.25rem; 
 		line-height: 1.2;
-		/* Ajustar si se usan SVGs */
-		/* width: 24px; height: 24px; */ 
 	}
-	/* --- *** FIN CSS MEJORA ESTÉTICA *** --- */
 
 	.editor-sidebar input[type="file"] { display: none; }
 	.prop-label { 
-		font-size: 0.85rem; 
+		font-size: 0.85rem;
 		font-weight: 600; 
 		color: var(--text-light); 
 		margin-top: 0.8rem; 
 		margin-bottom: 0.3rem; 
 		display: block; 
 	}
+	.help-text {
+		font-size: 0.8rem;
+		color: var(--text-light);
+	}
 	.btn-delete { 
 		background-color: #f15e5e; 
 		color: white; 
 		border-color: #f15e5e; 
-		margin-top: 1rem; 
+		margin-top: 1rem;
 	}
 	.btn-delete:hover { background-color: #e53e3e; border-color: #e53e3e; }
 	.actions { 
 		margin-top: auto; 
 		padding-top: 1.5rem; 
-		border-top: 1px solid var(--border-color); 
+		border-top: 1px solid var(--border-color);
 	}
     .actions .btn-secondary, .actions .btn-primary { 
 		width: 100%; 
 		text-align: center; 
 		padding: 0.6rem 1rem; 
-		font-size: 0.85rem; 
+		font-size: 0.85rem;
 		margin: 0 0 0.75rem 0; 
 	}
 </style>

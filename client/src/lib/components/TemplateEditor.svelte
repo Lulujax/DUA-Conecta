@@ -10,9 +10,16 @@
 	import { editorStore } from '../editor/editor.store.svelte';
 	import { apiService } from '../editor/apiService';
 	
-	// --- Importamos los NUEVOS componentes de UI ---
+	// --- Importamos los componentes de UI ---
 	import EditorSidebar from './editor/EditorSidebar.svelte'; 
-	import TextToolbar from './editor/TextToolbar.svelte'; // <-- ¡NUEVO!
+	import TextToolbar from './editor/TextToolbar.svelte'; 
+	import ShapeToolbar from './editor/ShapeToolbar.svelte';
+	import ImageToolbar from './editor/ImageToolbar.svelte';
+
+	// --- *** INICIO DEL CAMBIO (Paso 3.2) *** ---
+	// Importamos la NUEVA barra de herramientas general
+	import GeneralToolbar from './editor/GeneralToolbar.svelte';
+	// --- *** FIN DEL CAMBIO *** ---
 
 	// --- PROPS ---
 	let {
@@ -22,10 +29,11 @@
 		templateId: string;
 		baseElements: Array<any>;
 	}>();
-
+	
 	// --- Lógica de carga de URL ---
 	let initialActivityId: number | null = null;
-	let initialActivityName: string | null = 'Plantilla sin nombre';
+	let initialActivityName: string |
+	null = 'Plantilla sin nombre';
 	if (browser) {
 		const urlParams = new URLSearchParams(window.location.search);
 		const activityIdParam = urlParams.get('activityId');
@@ -42,12 +50,11 @@
 	let canvasContainerRef: HTMLDivElement | null = $state(null);
 	let verticalSnapLine = $state<number | null>(null);
 	let horizontalSnapLine = $state<number | null>(null);
+
 	function handleShowSnapLine(line: { type: 'vertical' | 'horizontal'; position: number | null }) {
 		if (line.type === 'vertical') verticalSnapLine = line.position;
 		else horizontalSnapLine = line.position;
 	}
-
-	// --- `availableFonts` MOVIDO a TextToolbar.svelte ---
 	
 	// --- LÓGICA DE INICIALIZACIÓN ---
 	onMount(() => {
@@ -95,14 +102,13 @@
 		setTimeout(() => { blockNavigation = true; }, 0);
 	});
 
-	// --- `formatList` y `stopToolbarClick` MOVIDOS a TextToolbar.svelte ---
-
 	function handleKeyDown(event: KeyboardEvent) {
 		if ((event.target as HTMLElement)?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement)?.tagName)) return;
-		
 		if (event.ctrlKey || event.metaKey) {
-			if (event.key === 'z') { event.preventDefault(); editorStore.undo(); }
-			else if (event.key === 'y' || (event.shiftKey && event.key === 'Z')) { event.preventDefault(); editorStore.redo(); }
+			if (event.key === 'z') { event.preventDefault(); editorStore.undo();
+			}
+			else if (event.key === 'y' || (event.shiftKey && event.key === 'Z')) { event.preventDefault(); editorStore.redo();
+			}
 			else if (event.key === 'b') { event.preventDefault(); editorStore.toggleStyle('isBold'); }
 			else if (event.key === 'i') { event.preventDefault(); editorStore.toggleStyle('isItalic'); }
 			else if (event.key === 'u') { event.preventDefault(); editorStore.toggleStyle('isUnderlined'); }
@@ -126,8 +132,15 @@
 
 	<div class="editor-main-area">
 		
-		{#if editorStore.selectedElement?.type === 'text'}
-			<TextToolbar />
+		{#if editorStore.selectedElement}
+			<GeneralToolbar />
+			{#if editorStore.selectedElement.type === 'text'}
+				<TextToolbar />
+			{:else if editorStore.selectedElement.type === 'shape'}
+				<ShapeToolbar />
+			{:else if editorStore.selectedElement.type === 'image'}
+				<ImageToolbar />
+			{/if}
 		{/if}
 
 		<div class="editor-canvas-area" onclick={deselectCanvas} ondragover={handleDragOver} ondrop={handleDrop}>
@@ -140,8 +153,10 @@
 						onSelect={(id, e) => editorStore.selectElement(id)}
 						onUpdate={editorStore.updateElement}
 						allElements={editorStore.elements}
-						{handleShowSnapLine} />
+						onShowSnapLine={handleShowSnapLine}
+					/>
 				{/each}
+
 				{#if verticalSnapLine !== null}<div class="snap-line vertical" style:left="{verticalSnapLine}px"></div>{/if}
 				{#if horizontalSnapLine !== null}<div class="snap-line horizontal" style:top="{horizontalSnapLine}px"></div>{/if}
 			</div>
@@ -151,7 +166,7 @@
 
 <style>
 	.editor-layout { 
-		display: flex; 
+		display: flex;
 		height: 100vh; 
 		overflow: hidden; 
 	}
@@ -161,7 +176,7 @@
 		display: flex; 
 		flex-direction: column; 
 		overflow: hidden; 
-		position: relative; 
+		position: relative;
 		background-color: var(--bg-section); 
 	}
     
@@ -169,28 +184,38 @@
 		flex-grow: 1; 
 		display: flex; 
 		justify-content: center; 
-		align-items: flex-start; 
+		align-items: flex-start;
 		padding: 2rem; 
 		padding-top: 70px; /* Espacio para la barra de texto */
 		overflow: auto; 
-		background-color: var(--bg-section); 
+		background-color: var(--bg-section);
 	}
     .canvas-container { 
 		position: relative; 
 		width: 700px; 
 		height: 990px; 
 		background-color: white; 
-		box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+		box-shadow: 0 10px 30px rgba(0,0,0,0.15);
 		overflow: hidden; 
 		border: 1px solid #ccc; 
 		flex-shrink: 0; 
 	}
+
+	/* Estilo final para las Snap Lines */
     .snap-line { 
 		position: absolute; 
-		background-color: #ff4d4d; 
-		z-index: 10000; 
+		background-color: #F472B6; 
+		z-index: 10000;
 		pointer-events: none; 
 	}
-    .snap-line.vertical { width: 1px; height: 100%; top: 0; }
-    .snap-line.horizontal { height: 1px; width: 100%; left: 0; }
+    .snap-line.vertical { 
+		width: 2px; 
+		height: 100%; 
+		top: 0;
+	}
+    .snap-line.horizontal { 
+		height: 2px;
+		width: 100%; 
+		left: 0; 
+	}
 </style>

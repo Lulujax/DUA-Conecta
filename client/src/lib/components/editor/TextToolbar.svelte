@@ -2,17 +2,14 @@
 	import { browser } from '$app/environment';
 	// Importamos el store usando la ruta relativa correcta
 	import { editorStore } from '../../editor/editor.store.svelte';
-
 	// Movemos las constantes y funciones que solo usa la barra de herramientas
 	const availableFonts = ['Arial', 'Verdana', 'Times New Roman', 'Courier New', 'Georgia', 'Comic Sans MS', 'Anton', 'Oswald'];
-	
 	function stopToolbarClick(event: MouseEvent) { 
 		event.stopPropagation(); 
 	}
 
 	async function formatList(command: 'insertUnorderedList' | 'insertOrderedList') {
 		if (!browser || !editorStore.selectedElement || editorStore.selectedElement.type !== 'text' || editorStore.selectedElementId === null) return;
-		
 		const normalized = command === 'insertUnorderedList' ? 'ul' : 'ol';
 		
 		// Encontramos el elemento wrapper del Draggable
@@ -41,7 +38,14 @@
 	</div>
 	<label class="icon-button color-label" title="Color de texto">
 		<svg viewBox="0 0 24 24"><path fill="currentColor" d="M17.75 11.25a.75.75 0 000-1.5h-11.5a.75.75 0 000 1.5h11.5zm.75 1.5a.75.75 0 01-.75.75H6a.75.75 0 010-1.5h11.75a.75.75 0 01.75.75zm0 3a.75.75 0 01-.75.75H6a.75.75 0 010-1.5h11.75a.75.75 0 01.75.75zM12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zM12 6a1.5 1.5 0 110 3 1.5 1.5 0 010-3z"></path></svg>
-		<input type="color" class="color-picker-hidden" value={editorStore.selectedElement.color} oninput={(e) => editorStore.updateSelectedElement({ color: e.currentTarget.value }, true)} />
+		
+		<input 
+			type="color" 
+			class="color-picker-hidden" 
+			value={editorStore.selectedElement.color} 
+			oninput={(e) => editorStore.updateSelectedElement({ color: e.currentTarget.value }, false)} 
+			onchange={(e) => editorStore.updateSelectedElement({ color: e.currentTarget.value }, true)}
+		/>
 		<div class="color-indicator" style:background-color={editorStore.selectedElement.color || '#000000'}></div>
 	</label>
 	<button class="icon-button" class:active={editorStore.selectedElement.isBold} onclick={() => editorStore.toggleStyle('isBold')} title="Negrita (Ctrl+B)"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4.25-4H7v14h7.04c2.1 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z"></path></svg></button>
@@ -59,7 +63,7 @@
 
 <style>
 	.text-toolbar { 
-		position: absolute; 
+		position: absolute;
 		top: 1rem; 
 		left: 50%; 
 		transform: translateX(-50%); 
@@ -67,12 +71,12 @@
 		align-items: center; 
 		gap: 0.4rem; 
 		padding: 0.3rem 0.5rem; 
-		background-color: var(--bg-card); 
+		background-color: var(--bg-card);
 		border: 1px solid var(--border-color);
 		border-radius: 8px; 
 		box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
 		z-index: 1001; 
-		white-space: nowrap; 
+		white-space: nowrap;
 	}
 	.toolbar-select, .toolbar-input { 
 		padding: 0.2rem 0.4rem; 
@@ -81,7 +85,7 @@
 		background-color: var(--bg-section); 
 		color: var(--text-dark); 
 		font-size: 0.75rem; 
-		height: 28px; 
+		height: 28px;
 		box-sizing: border-box; 
 		outline: none; 
 	}
@@ -90,7 +94,7 @@
 		display: flex; 
 		align-items: center; 
 		background-color: var(--bg-section); 
-		border: 1px solid var(--border-color); 
+		border: 1px solid var(--border-color);
 		border-radius: 4px; 
 		overflow: hidden; 
 	}
@@ -101,7 +105,7 @@
 		justify-content: center; 
 		align-items: center; 
 		padding: 0; 
-		background-color: var(--bg-section); 
+		background-color: var(--bg-section);
 		border: 1px solid var(--border-color); 
 		color: var(--text-light); 
 		border-radius: 6px; 
@@ -125,7 +129,7 @@
 	}
 	.icon-button:disabled { opacity: 0.5; cursor: not-allowed; }
 	.font-size-control .icon-button { 
-		border: none; 
+		border: none;
 		border-radius: 0; 
 		background-color: transparent; 
 		width: 26px; 
@@ -140,7 +144,7 @@
 	.font-size-control .icon-button svg { width: 16px; height: 16px; }
 	.font-size-input { 
 		width: 35px; 
-		text-align: center; 
+		text-align: center;
 		margin: 0; 
 		padding: 0.2rem; 
 		border: none; 
@@ -149,14 +153,14 @@
 	}
 	.font-size-input::-webkit-outer-spin-button, .font-size-input::-webkit-inner-spin-button { 
 		-webkit-appearance: none; 
-		margin: 0; 
+		margin: 0;
 	}
 	.font-size-input { -moz-appearance: textfield; }
 	.text-toolbar .icon-button { 
 		width: 28px; 
 		height: 28px; 
 		background-color: transparent; 
-		border-color: transparent; 
+		border-color: transparent;
 	}
 	.text-toolbar .icon-button svg { width: 18px; height: 18px; fill: currentColor; }
 	.text-toolbar .icon-button:hover:not(:disabled) { 
@@ -172,14 +176,15 @@
 	.color-label { 
 		position: relative; 
 		border: 1px solid var(--border-color); 
-		display: flex; 
+		display: flex;
 		flex-direction: column; 
 		align-items: center; 
 		justify-content: center; 
 		padding: 2px; 
 		box-sizing: border-box;
 	}
-	.color-label svg { width: 16px; height: 12px; margin-bottom: 1px; fill: currentColor; }
+	.color-label svg { width: 16px; height: 12px; margin-bottom: 1px;
+		fill: currentColor; }
 	.color-label:hover { background-color: var(--bg-section); }
 	.color-picker-hidden { 
 		position: absolute; 
@@ -187,7 +192,7 @@
 		left: 0; 
 		width: 100%; 
 		height: 100%; 
-		opacity: 0; 
+		opacity: 0;
 		cursor: pointer; 
 	}
 	.color-indicator { 

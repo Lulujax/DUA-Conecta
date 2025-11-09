@@ -1,47 +1,27 @@
 // @ts-nocheck
-// Arriba se usa ts-nocheck porque Svelte 5 runes (.svelte.ts)
-// aún puede dar falsos positivos en algunos editores.
-
 import { tick } from 'svelte';
+import { editorStore as self } from './editor.store.svelte'; // Importamos 'self' para evitar conflictos
 
-/**
- * --- ESTADO CENTRAL DEL EDITOR ---
- * Usamos Svelte 5 Runes ($state, $derived) para manejar la reactividad
- * de forma centralizada.
- */
-
-// Estado de los Elementos
+// --- ESTADO ---
 let elements = $state<Array<any>>([]);
 let selectedElementId = $state<number | null>(null);
 let nextZIndex = $state(1);
-
-// Estado de la Actividad
-let baseElements: Array<any> = []; // Copia de la plantilla original
+let baseElements: Array<any> = [];
 let activityName = $state('Plantilla sin nombre');
 let currentActivityId = $state<number | null>(null);
 let hasUnsavedChanges = $state(false);
-
-// Estado del Historial (Undo/Redo)
 let history = $state<Array<string>>([]);
 let historyIndex = $state(0);
-let applyingHistory = $state(false); // Flag para evitar bucles
+let applyingHistory = $state(false);
 
 // --- ESTADOS DERIVADOS ---
-
-/** El elemento actualmente seleccionado */
 let selectedElement = $derived(
 	elements.find((el) => el.id === selectedElementId) || null
 );
-/** Si se puede deshacer */
 let canUndo = $derived(historyIndex > 0);
-/** Si se puede rehacer */
 let canRedo = $derived(historyIndex < history.length - 1);
 
-// --- FUNCIONES DE HISTORIAL ---
-
-/**
- * Guarda el estado actual de 'elements' en el historial.
- */
+// --- HISTORIAL ---
 function saveStateToHistory() {
 	if (applyingHistory) return;
 	const currentStateString = JSON.stringify(elements);
@@ -52,50 +32,38 @@ function saveStateToHistory() {
 	history = nextHistory;
 	historyIndex = history.length - 1;
 
-	// Limita el historial a 50 pasos
 	if (history.length > 50) {
 		history.shift();
 		historyIndex--;
-		history = [...history]; // Forzar reactividad
+		history = [...history]; 
 	}
 	hasUnsavedChanges = true;
 }
 
-/**
- * Carga un estado previo o siguiente del historial.
- */
 async function loadStateFromHistory(index: number) {
 	if (index < 0 || index >= history.length) return;
 	applyingHistory = true;
 	elements = JSON.parse(history[index]);
 	historyIndex = index;
 	selectedElementId = null;
-	hasUnsavedChanges = (index > 0); // Solo hay cambios sin guardar si no estamos en el estado inicial
+	hasUnsavedChanges = (index > 0);
 	await tick();
 	applyingHistory = false;
 }
 
-/** Deshace la última acción */
 function undo() {
 	if (canUndo) loadStateFromHistory(historyIndex - 1);
 }
 
-/** Rehace la última acción deshecha */
 function redo() {
 	if (canRedo) loadStateFromHistory(historyIndex + 1);
 }
 
-// --- FUNCIONES DE MANIPULACIÓN DE ELEMENTOS ---
-
-/**
- * Actualiza una propiedad de un elemento específico.
- * @param isFinalChange Si es un cambio final que debe guardarse en el historial (ej. al soltar el mouse).
- */
+// --- MANIPULACIÓN DE ELEMENTOS ---
 function updateElement(id: number, data: any, isFinalChange: boolean = true) {
 	const index = elements.findIndex((el) => el.id === id);
 	if (index === -1) return;
 
-	// Mantenimiento de aspect-ratio para imágenes
 	if (elements[index].type === 'image') {
 		const oldWidth = elements[index].width;
 		const oldHeight = elements[index].height;
@@ -106,9 +74,8 @@ function updateElement(id: number, data: any, isFinalChange: boolean = true) {
 		}
 	}
 	
-	const currentZ = elements[index].z;
 	elements = elements.map((el, i) =>
-		i === index ? { ...el, ...data, z: data.z ?? currentZ } : el
+		i === index ? { ...el, ...data } : el
 	);
 
 	if (isFinalChange) {
@@ -119,28 +86,19 @@ function updateElement(id: number, data: any, isFinalChange: boolean = true) {
 	}
 }
 
-/** Actualiza una propiedad del elemento SELECCIONADO */
 function updateSelectedElement(data: any, isFinalChange: boolean = true) {
 	if (selectedElementId === null) return;
 	updateElement(selectedElementId, data, isFinalChange);
 }
 
-/** Selecciona un elemento y lo trae al frente (aumentando z-index) */
 function selectElement(id: number) {
 	selectedElementId = id;
-	const index = elements.findIndex((el) => el.id === id);
-	if (index !== -1) {
-		const updatedElement = { ...elements[index], z: nextZIndex++ };
-		elements = elements.map((el, i) => (i === index ? updatedElement : el));
-	}
 }
 
-/** Quita la selección de cualquier elemento */
 function deselect() {
 	selectedElementId = null;
 }
 
-/** Elimina el elemento actualmente seleccionado */
 function deleteSelected() {
 	if (selectedElementId === null) return;
 	elements = elements.filter((el) => el.id !== selectedElementId);
@@ -148,33 +106,122 @@ function deleteSelected() {
 	saveStateToHistory();
 }
 
-// --- FUNCIONES PARA AÑADIR ELEMENTOS ---
+// --- Lógica de Capas (Corregida) ---
+function renormalizeZIndexes() {
+	const sorted = [...elements].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+	elements = sorted.map((el, i) => ({
+		...el,
+		z: i
+	}));
+	nextZIndex = elements.length;
+	saveStateToHistory();
+}
 
-/** Añade un nuevo elemento de texto */
+function bringToFront() {
+	if (selectedElementId === null) return;
+	nextZIndex += 1;
+	updateSelectedElement({ z: nextZIndex }, true);
+}
+
+function sendToBack() {
+	if (selectedElementId === null) return;
+	
+	// Empuja todos los demás elementos 1 hacia arriba
+	elements = elements.map(el => {
+		if (el.id === selectedElementId) {
+			return { ...el, z: 0 }; // Pone el seleccionado en 0
+		}
+		return { ...el, z: (el.z ?? 0) + 1 };
+	});
+
+	nextZIndex = elements.length + 1;
+	saveStateToHistory();
+}
+
+function moveForward() {
+	if (!selectedElement) return;
+	if (hasDuplicateZIndexes()) renormalizeZIndexes();
+
+	const sorted = [...elements].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+	const currentIndex = sorted.findIndex(el => el.id === selectedElementId);
+
+	if (currentIndex < sorted.length - 1) {
+		const neighbor = sorted[currentIndex + 1];
+		const currentZ = selectedElement.z ?? 0;
+		const neighborZ = neighbor.z ?? 0;
+		
+		updateElement(selectedElementId, { z: neighborZ }, false); 
+		updateElement(neighbor.id, { z: currentZ }, true);
+	}
+}
+
+function moveBackward() {
+	if (!selectedElement) return;
+	if (hasDuplicateZIndexes()) renormalizeZIndexes();
+
+	const sorted = [...elements].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+	const currentIndex = sorted.findIndex(el => el.id === selectedElementId);
+
+	if (currentIndex > 0) {
+		const neighbor = sorted[currentIndex - 1];
+		const currentZ = selectedElement.z ?? 0;
+		const neighborZ = neighbor.z ?? 0;
+		
+		updateElement(selectedElementId, { z: neighborZ }, false); 
+		updateElement(neighbor.id, { z: currentZ }, true);
+	}
+}
+function hasDuplicateZIndexes() {
+	const zIndexes = new Set();
+	for (const el of elements) {
+		const z = el.z ?? 0;
+		if (zIndexes.has(z)) return true;
+		zIndexes.add(z);
+	}
+	return false;
+}
+
+// --- *** INICIO DEL CAMBIO (Paso 3.2) *** ---
+// --- NUEVA FUNCIÓN DE DUPLICAR ---
+function duplicateSelectedElement() {
+	if (!selectedElement) return;
+
+	// Clona el elemento seleccionado
+	const newElement = { 
+		...selectedElement,
+		id: Date.now(), // Asigna un nuevo ID único
+		x: selectedElement.x + 10, // Lo mueve 10px a la derecha
+		y: selectedElement.y + 10, // Lo mueve 10px hacia abajo
+		z: nextZIndex++ // Lo pone al frente de todo
+	};
+
+	// Añade el nuevo elemento a la lista
+	elements = [...elements, newElement];
+	
+	// Selecciona automáticamente el nuevo elemento duplicado
+	selectedElementId = newElement.id;
+
+	// Guarda en el historial
+	saveStateToHistory();
+}
+// --- *** FIN DEL CAMBIO *** ---
+
+
+// --- FUNCIONES PARA AÑADIR ELEMENTOS ---
 function addText() {
 	const newElement = {
 		id: Date.now(),
 		type: 'text',
-		content: 'Nuevo Texto',
-		x: 50,
-		y: 50,
-		width: 200,
-		height: 30,
-		fontSize: 16,
-		color: '#000000',
-		textAlign: 'left',
-		isBold: false,
-		fontFamily: 'Arial',
-		isItalic: false,
-		isUnderlined: false,
-		z: nextZIndex++
+		content: 'Nuevo Texto', x: 50, y: 50,
+		width: 200, height: 30, fontSize: 16, color: '#000000',
+		textAlign: 'left', isBold: false, fontFamily: 'Arial',
+		isItalic: false, isUnderlined: false, z: nextZIndex++
 	};
 	elements = [...elements, newElement];
 	selectedElementId = newElement.id;
 	saveStateToHistory();
 }
 
-/** Añade una imagen subida */
 function addImage(file: File, x = 50, y = 50) {
 	if (!file.type.startsWith('image/')) {
 		alert('Por favor, sube solo archivos de imagen.');
@@ -194,12 +241,10 @@ function addImage(file: File, x = 50, y = 50) {
 			
 			const newElement = {
 				id: Date.now(),
-				type: 'image',
-				url,
-				x: finalX,
-				y: finalY,
-				width: initialWidth,
-				height: initialHeight,
+				type: 'image', url,
+				x: finalX, y: finalY,
+				width: initialWidth, height: initialHeight,
+				opacity: 1, 
 				z: nextZIndex++
 			};
 			elements = [...elements, newElement];
@@ -212,22 +257,17 @@ function addImage(file: File, x = 50, y = 50) {
 	reader.readAsDataURL(file);
 }
 
-/** Añade una forma (círculo, línea, etc.) */
 function addShape(type: 'arrow' | 'line' | 'circle' | 'rectangle') {
 	const id = Date.now();
 	const shapeDefaults: any = {
 		id,
-		type: 'shape',
-		shapeType: type,
-		x: 100,
-		y: 100,
+		type: 'shape', shapeType: type,
+		x: 100, y: 100,
 		width: (type === 'circle' || type === 'rectangle') ? 80 : 140, 
 		height: (type === 'circle' || type === 'rectangle') ? 80 : 20, 
 		stroke: '#000000',
-		fill: (type === 'rectangle' || type === 'circle') ? '#EEEEEE' : 'transparent', // Relleno para círculo y rect
-		strokeWidth: 4,
-		rotation: 0,
-		z: nextZIndex++
+		fill: (type === 'rectangle' || type === 'circle') ? '#EEEEEE' : null,
+		strokeWidth: 4, rotation: 0, z: nextZIndex++
 	};
 	elements = [...elements, shapeDefaults];
 	selectedElementId = id;
@@ -236,7 +276,6 @@ function addShape(type: 'arrow' | 'line' | 'circle' | 'rectangle') {
 
 
 // --- FUNCIONES DE LA BARRA DE TEXTO ---
-
 function toggleStyle(styleProp: 'isBold' | 'isItalic' | 'isUnderlined') {
 	if (selectedElement?.type === 'text' && selectedElementId !== null) {
 		updateSelectedElement({ [styleProp]: !selectedElement[styleProp] }, true);
@@ -263,10 +302,8 @@ function updateFontSizeFromInput(event: Event) {
 		if (!isNaN(newSize)) {
 			newSize = Math.max(8, Math.min(120, newSize));
 			updateSelectedElement({ fontSize: newSize }, true);
-			// Corregir el input si el valor estaba fuera de rango
 			if (parseInt(input.value) !== newSize) input.value = newSize.toString();
 		} else {
-			// Resetear al valor actual si la entrada no es un número
 			input.value = selectedElement.fontSize.toString();
 		}
 	}
@@ -274,14 +311,18 @@ function updateFontSizeFromInput(event: Event) {
 
 
 // --- FUNCIONES DE INICIALIZACIÓN Y API ---
-
-/** Inicializa el store con los datos de la plantilla base */
 function init(base: Array<any>, activityId: number | null, activityNameStr: string | null) {
-	baseElements = structuredClone(base);
-	elements = structuredClone(base);
+	const processedBase = base.map((el, i) => ({
+		...el,
+		z: el.z ?? i
+	}));
+
+	baseElements = structuredClone(processedBase);
+	elements = structuredClone(processedBase);
 	history = [JSON.stringify(elements)];
 	historyIndex = 0;
-	nextZIndex = elements.length + 1;
+	nextZIndex = elements.length; 
+	
 	hasUnsavedChanges = false;
 	currentActivityId = activityId;
 	if (activityNameStr) {
@@ -289,15 +330,16 @@ function init(base: Array<any>, activityId: number | null, activityNameStr: stri
 	}
 }
 
-/** Carga los datos de una actividad existente (llamado por el servicio API) */
 function setLoadedActivity(id: number, name: string, loadedElements: Array<any>) {
 	const processedElements = loadedElements.map((el: any, i: number) => ({
 		...el,
-		z: el.z || i + 1
+		z: el.z ?? i
 	}));
 	
 	elements = processedElements;
-	nextZIndex = processedElements.length + 2;
+	const maxZ = elements.reduce((max, el) => Math.max(max, el.z ?? 0), 0);
+	nextZIndex = maxZ + 1;
+
 	activityName = name;
 	currentActivityId = id;
 	const currentStateString = JSON.stringify(elements);
@@ -307,35 +349,31 @@ function setLoadedActivity(id: number, name: string, loadedElements: Array<any>)
 	selectedElementId = null;
 }
 
-/** Resetea el estado a la plantilla base (si falla la carga de API) */
 function resetToBase() {
 	elements = structuredClone(baseElements);
 	history = [JSON.stringify(elements)];
 	historyIndex = 0;
-	nextZIndex = elements.length + 1;
+	nextZIndex = elements.length;
 	hasUnsavedChanges = false;
 	currentActivityId = null;
 	activityName = 'Plantilla sin nombre';
 	selectedElementId = null;
 }
 
-/** Actualiza el ID y nombre después de guardar una NUEVA actividad */
 function setSavedAsNew(id: number, name: string) {
 	currentActivityId = id;
 	activityName = name;
 	hasUnsavedChanges = false;
-	history = [JSON.stringify(elements)]; // Resetea el historial, este es el nuevo punto 0
+	history = [JSON.stringify(elements)]; 
 	historyIndex = 0;
 }
 
-/** Marca los cambios como guardados (después de actualizar) */
 function setChangesSaved() {
 	hasUnsavedChanges = false;
-	history = [JSON.stringify(elements)]; // Resetea el historial
+	history = [JSON.stringify(elements)]; 
 	historyIndex = 0;
 }
 
-/** Obtiene el payload necesario para guardar/actualizar */
 function getActivityPayload(templateId: string) {
 	return {
 		name: activityName.trim() === "" ? "Plantilla sin nombre" : activityName.trim(),
@@ -344,7 +382,6 @@ function getActivityPayload(templateId: string) {
 	};
 }
 
-/** Permite al componente 'EditorSidebar' actualizar el nombre */
 function updateActivityName(name: string) {
 	if (name !== activityName) {
 		activityName = name;
@@ -352,45 +389,39 @@ function updateActivityName(name: string) {
 	}
 }
 
-// --- *** LA CORRECCIÓN *** ---
-// Exportamos un único objeto 'editorStore' que usa getters
-// para exponer el estado reactivo de forma segura.
 export const editorStore = {
-	// Estado (lectura)
 	get elements() { return elements; },
 	get selectedElementId() { return selectedElementId; },
 	get hasUnsavedChanges() { return hasUnsavedChanges; },
 	get activityName() { return activityName; },
 	get currentActivityId() { return currentActivityId; },
-	
-	// Estado Derivado (lectura)
 	get selectedElement() { return selectedElement; },
 	get canUndo() { return canUndo; },
 	get canRedo() { return canRedo; },
-	
-	// Funciones de Historial
 	undo,
 	redo,
-	
-	// Funciones de Manipulación
 	updateElement,
 	updateSelectedElement,
 	selectElement,
 	deselect,
 	deleteSelected,
+	bringToFront,
+	sendToBack,
+	moveForward,
+	moveBackward,
 	
-	// Funciones de Añadir
+	// --- *** INICIO DEL CAMBIO (Paso 3.2) *** ---
+	// Añadimos la nueva función a la exportación
+	duplicateSelectedElement,
+	// --- *** FIN DEL CAMBIO *** ---
+
 	addText,
 	addImage,
 	addShape,
-	
-	// Funciones de Barra de Texto
 	toggleStyle,
 	changeTextAlign,
 	changeFontSize,
 	updateFontSizeFromInput,
-	
-	// Funciones de Ciclo de Vida
 	init,
 	setLoadedActivity,
 	resetToBase,
