@@ -1,16 +1,17 @@
-// @ts-nocheck
 import { tick } from 'svelte';
-import { editorStore as self } from './editor.store.svelte'; // Importamos 'self' para evitar conflictos
 
 // --- ESTADO ---
-let elements = $state<Array<any>>([]);
+// Ahora TypeScript sabe que esto es un array de EditorElement, no de "cualquier cosa"
+let elements = $state<App.EditorElement[]>([]);
 let selectedElementId = $state<number | null>(null);
 let nextZIndex = $state(1);
-let baseElements: Array<any> = [];
+let baseElements: App.EditorElement[] = []; // Copia de seguridad
 let activityName = $state('Plantilla sin nombre');
 let currentActivityId = $state<number | null>(null);
 let hasUnsavedChanges = $state(false);
-let history = $state<Array<string>>([]);
+
+// Historial de deshacer/rehacer
+let history = $state<string[]>([]);
 let historyIndex = $state(0);
 let applyingHistory = $state(false);
 
@@ -25,13 +26,15 @@ let canRedo = $derived(historyIndex < history.length - 1);
 function saveStateToHistory() {
 	if (applyingHistory) return;
 	const currentStateString = JSON.stringify(elements);
-	if (currentStateString === history[historyIndex]) return;
+	// Evitar duplicados si no hubo cambios reales
+	if (historyIndex >= 0 && currentStateString === history[historyIndex]) return;
 
 	const nextHistory = history.slice(0, historyIndex + 1);
 	nextHistory.push(currentStateString);
 	history = nextHistory;
 	historyIndex = history.length - 1;
 
+	// Limitar historial a 50 pasos para no saturar memoria
 	if (history.length > 50) {
 		history.shift();
 		historyIndex--;
@@ -43,12 +46,17 @@ function saveStateToHistory() {
 async function loadStateFromHistory(index: number) {
 	if (index < 0 || index >= history.length) return;
 	applyingHistory = true;
-	elements = JSON.parse(history[index]);
-	historyIndex = index;
-	selectedElementId = null;
-	hasUnsavedChanges = (index > 0);
-	await tick();
-	applyingHistory = false;
+	try {
+		elements = JSON.parse(history[index]);
+		historyIndex = index;
+		selectedElementId = null;
+		hasUnsavedChanges = (index > 0); // Si estamos en el paso 0, no hay cambios "nuevos"
+		await tick();
+	} catch (e) {
+		console.error("Error al cargar historial", e);
+	} finally {
+		applyingHistory = false;
+	}
 }
 
 function undo() {
@@ -60,10 +68,13 @@ function redo() {
 }
 
 // --- MANIPULACIÓN DE ELEMENTOS ---
-function updateElement(id: number, data: any, isFinalChange: boolean = true) {
+
+// Partial<App.EditorElement> significa que puedes pasar solo las propiedades que quieres cambiar
+function updateElement(id: number, data: Partial<App.EditorElement>, isFinalChange: boolean = true) {
 	const index = elements.findIndex((el) => el.id === id);
 	if (index === -1) return;
 
+	// Lógica especial para mantener el aspecto de las imágenes
 	if (elements[index].type === 'image') {
 		const oldWidth = elements[index].width;
 		const oldHeight = elements[index].height;
@@ -74,6 +85,7 @@ function updateElement(id: number, data: any, isFinalChange: boolean = true) {
 		}
 	}
 	
+	// Actualización inmutable
 	elements = elements.map((el, i) =>
 		i === index ? { ...el, ...data } : el
 	);
@@ -86,7 +98,7 @@ function updateElement(id: number, data: any, isFinalChange: boolean = true) {
 	}
 }
 
-function updateSelectedElement(data: any, isFinalChange: boolean = true) {
+function updateSelectedElement(data: Partial<App.EditorElement>, isFinalChange: boolean = true) {
 	if (selectedElementId === null) return;
 	updateElement(selectedElementId, data, isFinalChange);
 }
@@ -106,49 +118,60 @@ function deleteSelected() {
 	saveStateToHistory();
 }
 
-// --- Lógica de Capas (Corregida) ---
+function duplicateSelectedElement() {
+	if (!selectedElement) return;
+
+	const newElement: App.EditorElement = { 
+		...selectedElement,
+		id: Date.now(), 
+		x: selectedElement.x + 20,
+		y: selectedElement.y + 20,
+		z: nextZIndex++ 
+	};
+
+	elements = [...elements, newElement];
+	selectedElementId = newElement.id;
+	saveStateToHistory();
+}
+
+// --- Lógica de Capas ---
 function renormalizeZIndexes() {
 	const sorted = [...elements].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
 	elements = sorted.map((el, i) => ({
 		...el,
-		z: i
+		z: i + 1
 	}));
-	nextZIndex = elements.length;
+	nextZIndex = elements.length + 1;
 	saveStateToHistory();
 }
 
 function bringToFront() {
 	if (selectedElementId === null) return;
-	nextZIndex += 1;
+	// Simplemente asignamos un Z mayor al actual máximo
+	const maxZ = elements.reduce((max, el) => Math.max(max, el.z), 0);
+	nextZIndex = maxZ + 1;
 	updateSelectedElement({ z: nextZIndex }, true);
 }
 
 function sendToBack() {
 	if (selectedElementId === null) return;
-	
-	// Empuja todos los demás elementos 1 hacia arriba
-	elements = elements.map(el => {
-		if (el.id === selectedElementId) {
-			return { ...el, z: 0 }; // Pone el seleccionado en 0
-		}
-		return { ...el, z: (el.z ?? 0) + 1 };
-	});
-
-	nextZIndex = elements.length + 1;
-	saveStateToHistory();
+	// La estrategia más segura: poner este en 0 y re-normalizar todos
+	updateElement(selectedElementId, { z: -1 }, false); // Temporalmente el más bajo
+	renormalizeZIndexes(); // Esto pondrá al -1 como 1 y a los demás hacia arriba
 }
 
 function moveForward() {
 	if (!selectedElement) return;
-	if (hasDuplicateZIndexes()) renormalizeZIndexes();
-
-	const sorted = [...elements].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+	// Ordenamos por Z actual
+	const sorted = [...elements].sort((a, b) => a.z - b.z);
 	const currentIndex = sorted.findIndex(el => el.id === selectedElementId);
 
+	// Si no es el último (el de más arriba)
 	if (currentIndex < sorted.length - 1) {
 		const neighbor = sorted[currentIndex + 1];
-		const currentZ = selectedElement.z ?? 0;
-		const neighborZ = neighbor.z ?? 0;
+		// Intercambiamos sus Z
+		const currentZ = selectedElement.z;
+		const neighborZ = neighbor.z;
 		
 		updateElement(selectedElementId, { z: neighborZ }, false); 
 		updateElement(neighbor.id, { z: currentZ }, true);
@@ -157,65 +180,34 @@ function moveForward() {
 
 function moveBackward() {
 	if (!selectedElement) return;
-	if (hasDuplicateZIndexes()) renormalizeZIndexes();
-
-	const sorted = [...elements].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+	const sorted = [...elements].sort((a, b) => a.z - b.z);
 	const currentIndex = sorted.findIndex(el => el.id === selectedElementId);
 
+	// Si no es el primero (el del fondo)
 	if (currentIndex > 0) {
 		const neighbor = sorted[currentIndex - 1];
-		const currentZ = selectedElement.z ?? 0;
-		const neighborZ = neighbor.z ?? 0;
+		const currentZ = selectedElement.z;
+		const neighborZ = neighbor.z;
 		
 		updateElement(selectedElementId, { z: neighborZ }, false); 
 		updateElement(neighbor.id, { z: currentZ }, true);
 	}
 }
-function hasDuplicateZIndexes() {
-	const zIndexes = new Set();
-	for (const el of elements) {
-		const z = el.z ?? 0;
-		if (zIndexes.has(z)) return true;
-		zIndexes.add(z);
-	}
-	return false;
-}
-
-// --- *** INICIO DEL CAMBIO (Paso 3.2) *** ---
-// --- NUEVA FUNCIÓN DE DUPLICAR ---
-function duplicateSelectedElement() {
-	if (!selectedElement) return;
-
-	// Clona el elemento seleccionado
-	const newElement = { 
-		...selectedElement,
-		id: Date.now(), // Asigna un nuevo ID único
-		x: selectedElement.x + 10, // Lo mueve 10px a la derecha
-		y: selectedElement.y + 10, // Lo mueve 10px hacia abajo
-		z: nextZIndex++ // Lo pone al frente de todo
-	};
-
-	// Añade el nuevo elemento a la lista
-	elements = [...elements, newElement];
-	
-	// Selecciona automáticamente el nuevo elemento duplicado
-	selectedElementId = newElement.id;
-
-	// Guarda en el historial
-	saveStateToHistory();
-}
-// --- *** FIN DEL CAMBIO *** ---
 
 
-// --- FUNCIONES PARA AÑADIR ELEMENTOS ---
+// --- CREACIÓN ---
 function addText() {
-	const newElement = {
+	const newElement: App.EditorElement = {
 		id: Date.now(),
 		type: 'text',
-		content: 'Nuevo Texto', x: 50, y: 50,
-		width: 200, height: 30, fontSize: 16, color: '#000000',
-		textAlign: 'left', isBold: false, fontFamily: 'Arial',
-		isItalic: false, isUnderlined: false, z: nextZIndex++
+		content: 'Nuevo Texto', 
+		x: 50, y: 50,
+		width: 200, height: 30, 
+		fontSize: 16, color: '#000000',
+		textAlign: 'left', isBold: false, 
+		fontFamily: 'Arial',
+		isItalic: false, isUnderlined: false, 
+		z: nextZIndex++
 	};
 	elements = [...elements, newElement];
 	selectedElementId = newElement.id;
@@ -239,7 +231,7 @@ function addImage(file: File, x = 50, y = 50) {
 			const finalX = Math.max(0, x - initialWidth / 2);
 			const finalY = Math.max(0, y - initialHeight / 2);
 			
-			const newElement = {
+			const newElement: App.EditorElement = {
 				id: Date.now(),
 				type: 'image', url,
 				x: finalX, y: finalY,
@@ -250,16 +242,14 @@ function addImage(file: File, x = 50, y = 50) {
 			elements = [...elements, newElement];
 			saveStateToHistory();
 		};
-		img.onerror = () => { alert('Error al cargar la imagen.'); };
 		img.src = url;
 	};
-	reader.onerror = () => { alert('Error al leer el archivo.'); };
 	reader.readAsDataURL(file);
 }
 
-function addShape(type: 'arrow' | 'line' | 'circle' | 'rectangle') {
+function addShape(type: App.ShapeType) {
 	const id = Date.now();
-	const shapeDefaults: any = {
+	const shapeDefaults: App.EditorElement = {
 		id,
 		type: 'shape', shapeType: type,
 		x: 100, y: 100,
@@ -275,14 +265,14 @@ function addShape(type: 'arrow' | 'line' | 'circle' | 'rectangle') {
 }
 
 
-// --- FUNCIONES DE LA BARRA DE TEXTO ---
+// --- ESTILOS ---
 function toggleStyle(styleProp: 'isBold' | 'isItalic' | 'isUnderlined') {
 	if (selectedElement?.type === 'text' && selectedElementId !== null) {
 		updateSelectedElement({ [styleProp]: !selectedElement[styleProp] }, true);
 	}
 }
 
-function changeTextAlign(align: 'left' | 'center' | 'right' | 'justify') {
+function changeTextAlign(align: App.TextAlign) {
 	if (selectedElement?.type === 'text' && selectedElementId !== null) {
 		updateSelectedElement({ textAlign: align }, true);
 	}
@@ -290,7 +280,8 @@ function changeTextAlign(align: 'left' | 'center' | 'right' | 'justify') {
 
 function changeFontSize(delta: number) {
 	if (selectedElement?.type === 'text' && selectedElementId !== null) {
-		const newSize = Math.max(8, Math.min(120, selectedElement.fontSize + delta));
+		const currentSize = selectedElement.fontSize || 16;
+		const newSize = Math.max(8, Math.min(120, currentSize + delta));
 		updateSelectedElement({ fontSize: newSize }, true);
 	}
 }
@@ -304,79 +295,62 @@ function updateFontSizeFromInput(event: Event) {
 			updateSelectedElement({ fontSize: newSize }, true);
 			if (parseInt(input.value) !== newSize) input.value = newSize.toString();
 		} else {
-			input.value = selectedElement.fontSize.toString();
+			input.value = (selectedElement.fontSize || 16).toString();
 		}
 	}
 }
 
 
-// --- FUNCIONES DE INICIALIZACIÓN Y API ---
-function init(base: Array<any>, activityId: number | null, activityNameStr: string | null) {
+// --- GESTIÓN DE ESTADO GLOBAL ---
+function init(base: App.EditorElement[], activityId: number | null, activityNameStr: string | null) {
+	// Normalizamos los datos entrantes para asegurar que tienen Z
 	const processedBase = base.map((el, i) => ({
 		...el,
-		z: el.z ?? i
+		z: el.z ?? (i + 1)
 	}));
 
 	baseElements = structuredClone(processedBase);
 	elements = structuredClone(processedBase);
+	
+	// Reiniciar historial
 	history = [JSON.stringify(elements)];
 	historyIndex = 0;
-	nextZIndex = elements.length; 
+	
+	// Calcular próximo Z disponible
+	const maxZ = elements.reduce((max, el) => Math.max(max, el.z), 0);
+	nextZIndex = maxZ + 1;
 	
 	hasUnsavedChanges = false;
 	currentActivityId = activityId;
 	if (activityNameStr) {
 		activityName = activityNameStr;
+	} else {
+		activityName = 'Plantilla sin nombre';
 	}
 }
 
-function setLoadedActivity(id: number, name: string, loadedElements: Array<any>) {
-	const processedElements = loadedElements.map((el: any, i: number) => ({
-		...el,
-		z: el.z ?? i
-	}));
-	
-	elements = processedElements;
-	const maxZ = elements.reduce((max, el) => Math.max(max, el.z ?? 0), 0);
-	nextZIndex = maxZ + 1;
-
-	activityName = name;
-	currentActivityId = id;
-	const currentStateString = JSON.stringify(elements);
-	history = [currentStateString];
-	historyIndex = 0;
-	hasUnsavedChanges = false;
-	selectedElementId = null;
+function setLoadedActivity(id: number, name: string, loadedElements: App.EditorElement[]) {
+	init(loadedElements, id, name);
 }
 
 function resetToBase() {
-	elements = structuredClone(baseElements);
-	history = [JSON.stringify(elements)];
-	historyIndex = 0;
-	nextZIndex = elements.length;
-	hasUnsavedChanges = false;
-	currentActivityId = null;
-	activityName = 'Plantilla sin nombre';
-	selectedElementId = null;
+	init(baseElements, null, 'Plantilla sin nombre');
 }
 
 function setSavedAsNew(id: number, name: string) {
 	currentActivityId = id;
 	activityName = name;
 	hasUnsavedChanges = false;
-	history = [JSON.stringify(elements)]; 
-	historyIndex = 0;
+	// El historial se mantiene, solo marcamos como guardado
 }
 
 function setChangesSaved() {
 	hasUnsavedChanges = false;
-	history = [JSON.stringify(elements)]; 
-	historyIndex = 0;
 }
 
 function getActivityPayload(templateId: string) {
 	return {
-		name: activityName.trim() === "" ? "Plantilla sin nombre" : activityName.trim(),
+		name: activityName.trim() || "Plantilla sin nombre",
 		templateId: templateId,
 		elements: elements,
 	};
@@ -398,6 +372,7 @@ export const editorStore = {
 	get selectedElement() { return selectedElement; },
 	get canUndo() { return canUndo; },
 	get canRedo() { return canRedo; },
+	
 	undo,
 	redo,
 	updateElement,
@@ -405,23 +380,22 @@ export const editorStore = {
 	selectElement,
 	deselect,
 	deleteSelected,
+	duplicateSelectedElement,
+	
 	bringToFront,
 	sendToBack,
 	moveForward,
 	moveBackward,
-	
-	// --- *** INICIO DEL CAMBIO (Paso 3.2) *** ---
-	// Añadimos la nueva función a la exportación
-	duplicateSelectedElement,
-	// --- *** FIN DEL CAMBIO *** ---
 
 	addText,
 	addImage,
 	addShape,
+	
 	toggleStyle,
 	changeTextAlign,
 	changeFontSize,
 	updateFontSizeFromInput,
+	
 	init,
 	setLoadedActivity,
 	resetToBase,

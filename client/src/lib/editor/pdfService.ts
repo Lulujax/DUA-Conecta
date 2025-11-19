@@ -1,13 +1,11 @@
 // src/lib/editor/pdfService.ts
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-// --- *** CAMBIO: Ya no importamos el store aquí *** ---
-// import { editorStore } from './editor.store.svelte';
 
 /**
- * Genera y descarga un PDF del contenedor del canvas.
+ * Genera y descarga un PDF de ALTA CALIDAD del contenedor del canvas.
  * @param canvasContainerRef El elemento HTML <div class="canvas-container">
- * @param filename El nombre final deseado para el archivo PDF (ej. "Mi_Actividad.pdf")
+ * @param filename El nombre final deseado para el archivo PDF
  */
 async function downloadPdf(canvasContainerRef: HTMLDivElement, filename: string) {
 	if (!canvasContainerRef) {
@@ -16,33 +14,43 @@ async function downloadPdf(canvasContainerRef: HTMLDivElement, filename: string)
 		return;
 	}
 
+	// CONFIGURACIÓN PRO: Alta resolución
 	const options = {
-		scale: 2, 
-		useCORS: true, 
+		scale: 3, // 3x de resolución (aprox 300 DPI para impresión nítida)
+		useCORS: true, // Permite cargar imágenes externas si las hubiera
 		backgroundColor: '#FFFFFF', 
 		scrollY: -window.scrollY, 
 		scrollX: -window.scrollX,
 		windowWidth: canvasContainerRef.scrollWidth,
-		windowHeight: canvasContainerRef.scrollHeight
+		windowHeight: canvasContainerRef.scrollHeight,
+		logging: false // Limpiamos la consola de ruido
 	};
 
 	try {
+		// 1. Generar el canvas con alta fidelidad
 		const canvas = await html2canvas(canvasContainerRef, options);
-		const imgData = canvas.toDataURL('image/jpeg', 1.0); 
+		
+		// 2. Usar PNG (Lossless) en lugar de JPEG para textos nítidos
+		const imgData = canvas.toDataURL('image/png'); 
 
+		// 3. Calcular dimensiones para PDF A4
 		const pdf = new jsPDF('p', 'px', 'a4'); 
 		const pdfWidth = pdf.internal.pageSize.getWidth();
-		const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+		const pdfHeight = pdf.internal.pageSize.getHeight();
 		
-		pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+		const imgProps = pdf.getImageProperties(imgData);
+		const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+		
+		// Renderizar
+		pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
 
-		// --- *** CAMBIO: Usamos el filename que recibimos como parámetro *** ---
+		// 4. Guardar
 		pdf.save(filename); 
-		// (Ya no mostramos la alerta aquí, la moveremos al Sidebar)
 
 	} catch (error) {
 		console.error('Error al generar PDF:', error);
-		alert('Error al generar PDF. Revisa la consola.');
+		// Lanzamos el error para que el componente sepa que falló y quite el spinner
+		throw error;
 	}
 }
 

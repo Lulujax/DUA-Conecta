@@ -4,53 +4,98 @@
 	import { editorStore } from '../../editor/editor.store.svelte';
 	import { apiService } from '../../editor/apiService';
 	import { pdfService } from '../../editor/pdfService';
+    // Importamos nuestro nuevo Modal
+    import InputModal from '../ui/InputModal.svelte';
 	
 	let { templateId, canvasContainerRef } = $props<{
 		templateId: string;
 		canvasContainerRef: HTMLDivElement | null;
 	}>();
 
-	async function handleDownloadPdf() {
-		// --- *** INICIO DEL CAMBIO (Prompt de Nombre) *** ---
+	// --- ESTADO LOCAL ---
+	let isDownloading = $state(false);
+    
+    // Estado para el Modal
+    let showModal = $state(false);
+    let modalMode = $state<'pdf' | 'save'>('pdf'); // Para saber qué estamos pidiendo
+    let modalTitle = $state('');
+    let modalDefault = $state('');
 
-		// 1. Obtenemos el nombre actual como sugerencia
-		const currentName = editorStore.activityName;
+    // --- HANDLERS (Abrir Modal) ---
+    
+    function requestPdfName() {
+        modalMode = 'pdf';
+        modalTitle = "Nombre del archivo PDF";
+        modalDefault = editorStore.activityName;
+        showModal = true;
+    }
 
-		// 2. Preguntamos al usuario por el nombre deseado
-		const newName = prompt("Ingresa el nombre para tu archivo PDF:", currentName);
+    function requestSaveName() {
+        // Si ya tiene ID (es edición), guardamos directo sin preguntar nombre
+        if (editorStore.currentActivityId) {
+            executeSave(editorStore.activityName);
+        } else {
+            // Si es nueva, pedimos nombre
+            modalMode = 'save';
+            modalTitle = "Nombre de la Actividad";
+            modalDefault = editorStore.activityName;
+            showModal = true;
+        }
+    }
 
-		// 3. Si el usuario presiona "Cancelar" (newName es null) o deja el campo vacío
-		if (!newName || newName.trim() === "") {
-			alert("Descarga cancelada.");
-			return; // Detenemos la función
-		}
+    // --- EJECUCIÓN (Lo que pasa al confirmar el Modal) ---
 
-		// 4. Limpiamos el nombre para que sea seguro para un archivo
-		// Reemplaza espacios con guiones bajos y elimina caracteres no válidos
-		const sanitizedName = newName.trim().replace(/[^a-z0-9_-\s]/gi, '').replace(/\s+/g, '_');
+    async function handleModalConfirm(value: string) {
+        showModal = false; // Cerramos modal
+        
+        if (modalMode === 'pdf') {
+            await executePdfDownload(value);
+        } else if (modalMode === 'save') {
+            await executeSave(value);
+        }
+    }
+
+	async function executePdfDownload(name: string) {
+		const sanitizedName = name.trim().replace(/[^a-z0-9_-\s]/gi, '').replace(/\s+/g, '_');
 		const finalFilename = `DUA-Conecta_${sanitizedName}.pdf`;
 
-		// 5. Ocultamos la selección y esperamos a que Svelte actualice
-		editorStore.deselect();
-		await tick(); 
-
-		// 6. Llamamos al servicio con el nombre final
-		await pdfService.downloadPdf(canvasContainerRef, finalFilename);
-
-		// 7. Damos la alerta de éxito aquí
-		alert('¡PDF generado con éxito!');
-
-		// --- *** FIN DEL CAMBIO *** ---
+		try {
+			isDownloading = true;
+			editorStore.deselect();
+			await tick();
+			await pdfService.downloadPdf(canvasContainerRef, finalFilename);
+		} catch (error) {
+			alert('Hubo un error al generar el PDF.');
+		} finally {
+			isDownloading = false;
+		}
 	}
+
+    async function executeSave(name: string) {
+        if (name !== editorStore.activityName) {
+            editorStore.updateActivityName(name);
+        }
+        
+        // CORRECCIÓN: Llamamos a saveChanges SOLO con templateId
+        // (El token ya no se pasa porque va en la cookie)
+        await apiService.saveChanges(templateId);
+    }
 
 	function handleFileInput(e: Event) {
 		const input = e.target as HTMLInputElement;
-		if (input.files?.[0]) {
-			editorStore.addImage(input.files[0]);
-		}
+		if (input.files?.[0]) editorStore.addImage(input.files[0]);
 		input.value = '';
 	}
 </script>
+
+<InputModal 
+    isOpen={showModal} 
+    title={modalTitle} 
+    defaultValue={modalDefault}
+    confirmLabel={modalMode === 'pdf' ? 'Descargar' : 'Guardar'}
+    onConfirm={handleModalConfirm}
+    onCancel={() => showModal = false}
+/>
 
 <aside class="editor-sidebar">
 	<a href="/dashboard/plantillas" class="back-button">
@@ -73,24 +118,19 @@
 			<button class="tool-button" onclick={editorStore.addText}>
 				<span class="tool-icon">T</span> <span class="tool-label">Texto</span>
 			</button>
-			
 			<label for="image-upload" class="tool-button">
 				<span class="tool-icon">🖼️</span> <span class="tool-label">Imagen</span>
 			</label>
 			<input type="file" id="image-upload" accept="image/*" onchange={handleFileInput} />
-
 			<button class="tool-button" onclick={() => editorStore.addShape('rectangle')}>
 				<span class="tool-icon">⬜</span> <span class="tool-label">Forma</span>
 			</button>
-			
 			<button class="tool-button" onclick={() => editorStore.addShape('circle')}>
 				<span class="tool-icon">⚪</span> <span class="tool-label">Círculo</span>
 			</button>
-
 			<button class="tool-button" onclick={() => editorStore.addShape('line')}>
 				<span class="tool-icon">/</span> <span class="tool-label">Línea</span>
 			</button>
-			
 			<button class="tool-button" onclick={() => editorStore.addShape('arrow')}>
 				<span class="tool-icon">→</span> <span class="tool-label">Flecha</span>
 			</button>
@@ -100,32 +140,27 @@
 	{#if editorStore.selectedElement}
 		<div class="tool-section">
 			<h3>Seleccionado</h3>
-			
 			{#if editorStore.selectedElement.type === 'image'}
 				<p class="prop-label" style="margin-top:0;">Imagen</p>
 				<p class="help-text">Edita la opacidad en la barra superior.</p>
 			{/if}
-
 			{#if editorStore.selectedElement.type === 'text'}
 				<p class="prop-label" style="margin-top:0;">Texto</p>
 				<p class="help-text">Edita el estilo en la barra superior.</p>
 			{/if}
-
 			{#if editorStore.selectedElement.type === 'shape'}
 				<p class="prop-label" style="margin-top:0;">Forma</p>
 				<p class="help-text">Edita los colores y grosor en la barra superior.</p>
 			{/if}
-
 			<button class="btn-secondary btn-delete" onclick={editorStore.deleteSelected} title="Eliminar (Supr/Borrar)">Eliminar</button>
 		</div>
 	{/if}
-
 
 	<div class="tool-section actions">
 		<h3>Acciones</h3>
 		<button 
 			class="btn-secondary" 
-			onclick={() => apiService.saveChanges($user.token, templateId)} 
+			onclick={requestSaveName} 
 			disabled={!editorStore.hasUnsavedChanges}
 		>
 			{#if editorStore.hasUnsavedChanges}
@@ -134,149 +169,44 @@
 				Guardado ✓
 			{/if}
 		</button>
-		<button class="btn-primary" onclick={handleDownloadPdf}>Descargar PDF</button>
+		
+		<button 
+			class="btn-primary" 
+			onclick={requestPdfName} 
+			disabled={isDownloading}
+			style:opacity={isDownloading ? 0.7 : 1}
+			style:cursor={isDownloading ? 'wait' : 'pointer'}
+		>
+			{#if isDownloading}
+				⏳ Generando...
+			{:else}
+				Descargar PDF
+			{/if}
+		</button>
 	</div>
 </aside>
 
 <style>
-	.editor-sidebar { 
-		width: 280px; 
-		flex-shrink: 0; 
-		background-color: var(--bg-card); 
-		border-right: 1px solid var(--border-color);
-		padding: 1.5rem; 
-		overflow-y: auto; 
-		display: flex; 
-		flex-direction: column; 
-		gap: 1rem; 
-	}
-	.back-button { 
-		text-decoration: none; 
-		color: var(--text-light); 
-		font-weight: 600; 
-		display: flex;
-		align-items: center; 
-		gap: 0.5rem; 
-		margin-bottom: 0rem; 
-		transition: color 0.2s ease; 
-	}
-    .back-button svg { 
-		flex-shrink: 0;
-		fill: none; 
-		stroke: currentColor; 
-		stroke-width: 2; 
-		stroke-linecap: round; 
-		stroke-linejoin: round; 
-	}
+    /* (Mantén los estilos de antes, son perfectos) */
+	.editor-sidebar { width: 280px; flex-shrink: 0; background-color: var(--bg-card); border-right: 1px solid var(--border-color); padding: 1.5rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
+	.back-button { text-decoration: none; color: var(--text-light); font-weight: 600; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0rem; transition: color 0.2s ease; }
+    .back-button svg { flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 	.back-button:hover { color: var(--primary-color); }
-	.history-controls { 
-		display: flex; 
-		gap: 0.5rem;
-		border-bottom: 1px solid var(--border-color); 
-		padding-bottom: 1rem; 
-	}
-	.icon-button { 
-		width: 32px; 
-		height: 32px; 
-		display: flex; 
-		justify-content: center; 
-		align-items: center; 
-		padding: 0;
-		background-color: var(--bg-section); 
-		border: 1px solid var(--border-color); 
-		color: var(--text-light); 
-		border-radius: 6px; 
-		cursor: pointer; 
-		transition: all 0.2s ease; 
-		flex-shrink: 0;
-	}
-	.icon-button svg { 
-		fill: none; 
-		stroke: currentColor; 
-		stroke-width: 2; 
-		stroke-linecap: round; 
-		stroke-linejoin: round; 
-		width: 18px; 
-		height: 18px;
-	}
-	.icon-button:hover:not(:disabled) { 
-		border-color: var(--primary-color); 
-		color: var(--primary-color); 
-		background-color: transparent; 
-	}
+	.history-controls { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
+	.icon-button { width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; padding: 0; background-color: var(--bg-section); border: 1px solid var(--border-color); color: var(--text-light); border-radius: 6px; cursor: pointer; transition: all 0.2s ease; flex-shrink: 0; }
+	.icon-button svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 18px; height: 18px; }
+	.icon-button:hover:not(:disabled) { border-color: var(--primary-color); color: var(--primary-color); background-color: transparent; }
 	.icon-button:disabled { opacity: 0.5; cursor: not-allowed; }
-	.tool-section h3 { 
-		font-size: 1rem;
-		font-weight: 700; 
-		color: var(--text-dark); 
-		margin: 0 0 1rem 0; 
-		padding-bottom: 0.5rem; 
-		border-bottom: 1px solid var(--border-color);
-	}
-	
-	.tool-grid {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(60px, 1fr));
-		gap: 0.5rem;
-	}
-	
-	.tool-button {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 0.25rem;
-		padding: 0.75rem 0.25rem;
-		background-color: var(--bg-card);
-		border: 1px solid var(--border-color);
-		border-radius: 8px;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		color: var(--text-light);
-		font-size: 0.75rem;
-		font-weight: 600;
-		font-family: var(--font-main);
-	}
-	.tool-button:hover {
-		border-color: var(--primary-color);
-		color: var(--primary-color);
-		background-color: var(--bg-section);
-	}
-	.tool-icon {
-		font-size: 1.25rem; 
-		line-height: 1.2;
-	}
-
+	.tool-section h3 { font-size: 1rem; font-weight: 700; color: var(--text-dark); margin: 0 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); }
+	.tool-grid { display: grid; grid-template-columns: repeat(3, minmax(60px, 1fr)); gap: 0.5rem; }
+	.tool-button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.75rem 0.25rem; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; color: var(--text-light); font-size: 0.75rem; font-weight: 600; font-family: var(--font-main); }
+	.tool-button:hover { border-color: var(--primary-color); color: var(--primary-color); background-color: var(--bg-section); }
+	.tool-icon { font-size: 1.25rem; line-height: 1.2; }
 	.editor-sidebar input[type="file"] { display: none; }
-	.prop-label { 
-		font-size: 0.85rem;
-		font-weight: 600; 
-		color: var(--text-light); 
-		margin-top: 0.8rem; 
-		margin-bottom: 0.3rem; 
-		display: block; 
-	}
-	.help-text {
-		font-size: 0.8rem;
-		color: var(--text-light);
-	}
-	.btn-delete { 
-		background-color: #f15e5e; 
-		color: white; 
-		border-color: #f15e5e; 
-		margin-top: 1rem;
-	}
+	.prop-label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); margin-top: 0.8rem; margin-bottom: 0.3rem; display: block; }
+	.help-text { font-size: 0.8rem; color: var(--text-light); }
+	.btn-delete { background-color: #f15e5e; color: white; border-color: #f15e5e; margin-top: 1rem; }
 	.btn-delete:hover { background-color: #e53e3e; border-color: #e53e3e; }
-	.actions { 
-		margin-top: auto; 
-		padding-top: 1.5rem; 
-		border-top: 1px solid var(--border-color);
-	}
-    .actions .btn-secondary, .actions .btn-primary { 
-		width: 100%; 
-		text-align: center; 
-		padding: 0.6rem 1rem; 
-		font-size: 0.85rem;
-		margin: 0 0 0.75rem 0; 
-	}
+	.actions { margin-top: auto; padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
+    .actions .btn-secondary, .actions .btn-primary { width: 100%; text-align: center; padding: 0.6rem 1rem; font-size: 0.85rem; margin: 0 0 0.75rem 0; }
 </style>

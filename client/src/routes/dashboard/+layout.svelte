@@ -2,37 +2,31 @@
     import { goto } from '$app/navigation';
     import { user } from '$lib/stores/auth';
     import { browser } from '$app/environment';
-    import { page } from '$app/stores'; // Necesario para $effect
+    import { page } from '$app/stores';
 
     /** @type {{children: import('svelte').Snippet}} */
     let { children } = $props();
 
-    // --- LÓGICA DE PROTECCIÓN CORREGIDA (AHORA AQUÍ) ---
-    // Este $effect protege SOLO las rutas dentro de /dashboard/...
+    // Lógica de protección de rutas
     $effect(() => {
         if (browser) {
             const { pathname } = $page.url;
             const currentUser = $user;
 
-            // Si el usuario NO está logueado Y está en alguna página del dashboard...
             if (!currentUser && pathname.startsWith('/dashboard')) {
-                // ...lo enviamos al login.
                 goto('/login');
             }
         }
     });
 
-
     function logout() {
         user.set(null);
-        // Usamos window.location para asegurar la recarga y redirección al home público
         if (browser) {
             window.location.href = '/';
         }
     }
 </script>
 
-<!-- Solo mostramos el contenido si el usuario existe (evita errores) -->
 {#if $user}
     <div class="page-wrapper">
       <header class="header">
@@ -43,11 +37,11 @@
         <nav class="navigation">
           <a href="/dashboard">Inicio</a>
           <a href="/dashboard/plantillas">Plantillas</a>
-          <a href="/dashboard/actividades">Mis Actividades</a>
+          <a href="/dashboard/ideas">Banco de Ideas</a> <a href="/dashboard/actividades">Mis Actividades</a>
           <a href="/dashboard/perfil">Mi Perfil</a>
         </nav>
         <div class="auth-buttons">
-          <button on:click={logout} class="btn-secondary">Cerrar Sesión</button>
+          <button onclick={logout} class="btn-secondary">Cerrar Sesión</button>
         </div>
       </header>
 

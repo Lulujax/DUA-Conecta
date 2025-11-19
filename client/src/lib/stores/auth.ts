@@ -1,49 +1,47 @@
 import { writable } from 'svelte/store';
+import { api } from '$lib/api'; // Usamos nuestro nuevo cliente
 import { browser } from '$app/environment';
 
-/**
- * Crea un store de autenticación seguro que se sincroniza con localStorage.
- */
-function createAuthStore() {
-    let initialUser = null;
-
-    // Solo intentamos leer localStorage si estamos en el navegador
-    if (browser) {
-        try {
-            const storedUser = window.localStorage.getItem('user');
-            
-            // Verificamos que no sea null, undefined, o la cadena "undefined"
-            if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
-                initialUser = JSON.parse(storedUser);
-            }
-        } catch (error) {
-            // Si JSON.parse falla (datos corruptos), lo ignoramos y limpiamos
-            console.error("Error al leer 'user' desde localStorage, limpiando:", error);
-            window.localStorage.removeItem('user'); // Limpiamos los datos corruptos
-            initialUser = null;
-        }
-    }
-
-    // Creamos el store con el valor inicial (null si falla o no existe)
-    const store = writable(initialUser);
-
-    // Cada vez que el store del usuario cambie, actualizamos localStorage.
-    store.subscribe((value) => {
-        if (browser) {
-            try {
-                if (value) {
-                    window.localStorage.setItem('user', JSON.stringify(value));
-                } else {
-                    window.localStorage.removeItem('user');
-                }
-            } catch (error) {
-                console.error("Error al guardar 'user' en localStorage:", error);
-            }
-        }
-    });
-
-    return store;
+interface User {
+    name: string;
+    email?: string;
+    id?: number;
 }
 
-// Exportamos la instancia única del store creado
+function createAuthStore() {
+    const { subscribe, set, update } = writable<User | null>(null);
+
+    return {
+        subscribe,
+        set,
+        // Función para verificar sesión al cargar la app
+        checkAuth: async () => {
+            if (!browser) return;
+            try {
+                const res = await api.get('/auth/me');
+                if (res.user) {
+                    set(res.user);
+                } else {
+                    set(null);
+                }
+            } catch (e) {
+                console.log("No hay sesión activa.");
+                set(null);
+            }
+        },
+        // Función de login (solo actualiza el store, la cookie ya la puso el navegador)
+        loginSuccess: (userData: User) => {
+            set(userData);
+        },
+        logout: async () => {
+            try {
+                await api.post('/auth/logout', {});
+            } finally {
+                set(null);
+                if (browser) window.location.href = '/login';
+            }
+        }
+    };
+}
+
 export const user = createAuthStore();

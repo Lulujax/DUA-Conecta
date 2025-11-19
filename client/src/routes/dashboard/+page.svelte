@@ -27,11 +27,19 @@
             <h3>Explorar Plantillas</h3>
             <p>Busca en la biblioteca y encuentra la actividad perfecta para tu clase.</p>
         </a>
+        
         <a href="/dashboard/actividades" class="dashboard-card">
             <div class="card-icon">📚</div>
             <h3>Mis Actividades</h3>
             <p>Accede a todas las actividades que has personalizado y guardado.</p>
         </a>
+
+        <a href="/dashboard/ideas" class="dashboard-card">
+            <div class="card-icon">💡</div>
+            <h3>Guía de Ideas</h3>
+            <p>Estrategias prácticas y adaptaciones para tu aula diversa.</p>
+        </a>
+
         <a href="/dashboard/perfil" class="dashboard-card">
             <div class="card-icon">👤</div>
             <h3>Gestionar mi Perfil</h3>
@@ -98,7 +106,8 @@
     
     @media (min-width: 768px) {
         .dashboard-grid {
-            grid-template-columns: repeat(3, 1fr);
+            /* Ajustamos para que quepan bien las 4 tarjetas */
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
         }
     }
 </style>
