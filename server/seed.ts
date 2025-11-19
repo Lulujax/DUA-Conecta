@@ -1,6 +1,6 @@
 import postgres from 'postgres'
 
-// --- LEER VARIABLES DE ENTORNO ---
+// --- 1. CARGAR VARIABLES DE ENTORNO ---
 const envFile = Bun.file('.env');
 if (await envFile.exists()) {
     const text = await envFile.text();
@@ -17,16 +17,24 @@ if (await envFile.exists()) {
 }
 
 if (!process.env.DATABASE_URL) {
-    console.error("❌ Error: No se encontró DATABASE_URL.");
+    console.error("❌ Error: No se encontró DATABASE_URL en el archivo .env");
     process.exit(1);
 }
 
-const sql = postgres(process.env.DATABASE_URL, { ssl: 'require' });
+console.log("🔌 Conectando a Render (Esto puede tardar si la DB está dormida)...");
+
+// --- 2. CONEXIÓN ROBUSTA ---
+// Usamos 'rejectUnauthorized: false' para evitar que Bun corte la conexión por certificados
+const sql = postgres(process.env.DATABASE_URL, { 
+    ssl: { rejectUnauthorized: false }, // <--- CAMBIO CLAVE PARA EL ERROR TLS
+    max: 1,             // Usar solo 1 conexión para el seed
+    idle_timeout: 20,   // Esperar más tiempo antes de cerrar
+    connect_timeout: 60 // Esperar hasta 60 segundos a que Render despierte
+});
 
 console.log("🌱 Iniciando actualización de plantillas...");
 
-// --- DATOS CALCULADOS (DADO Y BINGO) ---
-// ... (Mismos cálculos de antes para no romper nada) ...
+// --- DATOS DEL DADO (Lógica matemática) ---
 const CUBE_SIZE = 150; const ICON_SIZE = 100; const ICON_OFFSET = (CUBE_SIZE - ICON_SIZE) / 2;
 const SOLAPA_W = 150; const SOLAPA_H = 50; const Y_START = 200; const X_CENTER = 275;
 const Y1 = Y_START; const Y2 = Y1 + CUBE_SIZE; const Y3 = Y2 + CUBE_SIZE; const Y4 = Y3 + CUBE_SIZE;
@@ -57,6 +65,7 @@ const dadoElements = [
     { id: 37, type: 'image', url: '/dado-solapa.png', x: X2 + CUBE_SIZE, y: 646, width: SOLAPA_W, height: SOLAPA_H, rotation: 180, z: 3 }
 ];
 
+// --- DATOS DEL BINGO ---
 const flagWidth = 300; const flagHeight = 60; const bingoFontSize = 95; const bingoHeight = 130; const bingoY = 80;
 const subtitleHeight = 40; const subtitleY = bingoY + bingoHeight - 20;
 const gridWidth_b = 620; const rowHeight_b = 130; const y1_bingo = subtitleY + subtitleHeight + 20;
@@ -89,7 +98,7 @@ const bingoElements = [
     createText(120, bx1, y5_bingo), createText(121, bx2, y5_bingo), createText(122, bx3, y5_bingo), createText(123, bx4, y5_bingo), createText(124, bx5, y5_bingo),
 ];
 
-// --- LISTA MAESTRA (AHORA CON DESCRIPCIONES) ---
+// --- LISTA DE PLANTILLAS ---
 const templates = [
     {
         id: 1,
@@ -205,15 +214,14 @@ const templates = [
     }
 ];
 
-// --- EJECUCIÓN ---
+// --- 3. EJECUCIÓN (Borrar y reinsertar todo) ---
 async function main() {
     try {
-        // 1. Borrar la tabla vieja para que se cree con la nueva columna
         console.log("⚠️  Borrando tabla 'templates' antigua...");
         await sql`DROP TABLE IF EXISTS templates`;
 
-        // 2. Crear tabla con la nueva columna 'description'
-        console.log("🏗️  Creando nueva tabla 'templates' con descripciones...");
+        // RE-CREAR TABLA con la columna description
+        console.log("🏗️  Creando nueva tabla 'templates'...");
         await sql`
             CREATE TABLE templates (
                 id SERIAL PRIMARY KEY,
@@ -226,8 +234,7 @@ async function main() {
             );
         `;
 
-        // 3. Insertar datos
-        console.log(`📦 Insertando ${templates.length} plantillas con descripción...`);
+        console.log(`📦 Insertando ${templates.length} plantillas...`);
         for (const t of templates) {
             await sql`
                 INSERT INTO templates (name, category, thumbnail_url, description, base_elements)
@@ -240,7 +247,7 @@ async function main() {
         process.exit(0);
 
     } catch (error) {
-        console.error("❌ Error durante la actualización:", error);
+        console.error("❌ Error detallado:", error);
         process.exit(1);
     }
 }
