@@ -1,72 +1,100 @@
-Proyecto NEE-Actividades-Personalizadas
-1. Descripción del Proyecto
-Este proyecto tiene como objetivo crear una plataforma web para facilitar a los docentes la creación de material didáctico personalizado para estudiantes con Necesidades Educativas Especiales (NEE). La idea central es permitir que los profesores utilicen plantillas de actividades predefinidas y las personalicen rápidamente integrando los personajes favoritos de cada estudiante, ahorrando tiempo de edición y aumentando la motivación y el compromiso del niño con la tarea.
+# 🧑‍🏫 DUA-CONECTA: Recurso Digital para la Inclusión Educativa 🚀
 
-2. Objetivo Principal
-Reducir el tiempo y el esfuerzo que los docentes dedican a la personalización de actividades, ofreciendo una herramienta intuitiva que genera material didáctico atractivo y significativo para estudiantes con NEE, utilizando sus centros de interés (personajes favoritos) como vehículo para el aprendizaje.
+> Una plataforma web que traduce los principios del **Diseño Universal para el Aprendizaje (DUA)** en actividades imprimibles, personalizadas y listas para el aula.
 
-3. Pasos a Seguir y Planificación
-Aquí te detallo un plan de acción para que podamos ir construyendo el proyecto paso a paso.
+-----
 
-Fase 1: Planificación y Bases (¡Estamos aquí!)
-[✓] Creación del Repositorio: Iniciar el control de versiones con Git.
+## 🌟 Introducción y Propósito
 
-[✓] Documento README.md: Definir la visión, objetivos y alcance del proyecto.
+**DUA-Conecta** surge como una solución tecnológica directa a uno de los desafíos más persistentes en la educación: la falta de herramientas sistemáticas y personalizadas para la **atención de estudiantes con Necesidades Educativas Especiales (NEE)**.
 
-[✓] Archivo .gitignore: Configurar los archivos y carpetas que Git debe ignorar.
+[cite\_start]El proyecto aborda la brecha operativa donde el profesorado carece de recursos ágiles para implementar adaptaciones curriculares, generando una sobrecarga en los departamentos de orientación[cite: 773, 774]. Nuestro objetivo es **empoderar a los docentes** para que creen material didáctico significativo y altamente motivador en minutos.
 
-[ ] Definición de Tecnologías (Tech Stack): Decidir qué herramientas usaremos.
+## 💡 Fundamento Científico y Pedagógico
 
-Frontend (Lo que el usuario ve): ¿Usaremos React, Vue o Angular? Sugiero React por su gran comunidad y flexibilidad.
+[cite\_start]Este recurso digital está cimentado en la investigación titulada **"Diseño Universal para el Aprendizaje: Recurso Digital para la Atención de Estudiantes con Necesidades Educativas Especiales en el Liceo de Tecnología Industrial"**[cite: 726, 742], una tesis de grado que validó la necesidad de una herramienta de este tipo.
 
-Backend (La lógica del servidor): ¿Node.js con Express, Python con Django? Sugiero Node.js/Express por su facilidad de integración con React.
+El diseño se basa en tres pilares teóricos fundamentales:
 
-Base de Datos: ¿Firebase/Firestore, MongoDB, PostgreSQL? Sugiero Firestore por su facilidad de uso en tiempo real y su buena integración con sistemas de autenticación.
+1.  [cite\_start]**Diseño Universal para el Aprendizaje (DUA):** Se garantiza que la información se ofrece mediante **múltiples formatos de Representación** (ej. pictogramas, guías visuales) y que el estudiante puede demostrar su aprendizaje a través de múltiples medios de **Acción y Expresión**[cite: 788, 1082].
+2.  [cite\_start]**Teoría Cognitivo-Conductual (TCC):** Implementación de estrategias de **Autorregulación** y **Autoinstrucciones** (modelo de Meichenbaum) para ayudar a los estudiantes a gestionar la impulsividad y a abordar tareas académicas complejas paso a paso[cite: 892, 901, 1083].
+3.  [cite\_start]**Teoría Conductista (B.F. Skinner):** Uso de la **Economía de Fichas** y el **Reforzamiento Positivo** para el manejo conductual y la promoción de habilidades adaptativas y sociales de forma sistemática[cite: 911, 913, 1084].
 
-Estilos: ¿Tailwind CSS, Bootstrap, CSS puro? Sugiero Tailwind CSS para un desarrollo rápido y moderno.
+## ✨ Características Principales
 
-[ ] Diseño de la Base de Datos: Planificar cómo guardaremos la información.
+  * **Editor Visual:** Interfaz intuitiva (*Drag-and-Drop*) en Svelte para personalizar plantillas prediseñadas.
+  * **Generación de PDF de Alta Calidad:** Exporta materiales listos para imprimir y usar en el aula mediante `html2canvas` y `jspdf`.
+  * **Banco de Plantillas:** Recursos enfocados en Conducta, Matemáticas, Lectoescritura, y Habilidades Socioemocionales.
 
-Tabla de Profesores (nombre, email, contraseña).
+-----
 
-Tabla de Estudiantes (nombre, profesor_asociado, personajes_favoritos).
+## 🛠️ Stack Tecnológico
 
-Tabla de PlantillasDeActividad (nombre, tipo, estructura).
+| Componente | Tecnología | Descripción |
+| :--- | :--- | :--- |
+| **Frontend (UI)** | **SvelteKit + Svelte 5** | Interfaz de usuario reactiva y rápida. |
+| **Backend (API)** | **Bun + ElysiaJS** | Servidor ligero, de alto rendimiento con TypeScript. |
+| **Base de Datos** | **PostgreSQL** | Almacenamiento seguro y robusto de actividades y plantillas. |
+| **Dev Tools** | **Bun Runtime** | Entorno de ejecución y gestor de paquetes unificado. |
 
-[ ] Diseño de la Interfaz (Mockups): Crear bocetos de cómo se verán las pantallas principales (inicio de sesión, panel del profesor, creador de actividades, etc.). Podemos usar una herramienta como Figma.
+## ✍️ Creadores
 
-Fase 2: Desarrollo del Prototipo Mínimo Viable (MVP)
-Configuración del Entorno: Instalar las herramientas necesarias (Node.js, editor de código, etc.).
+Este proyecto fue conceptualizado, fundamentado y desarrollado por:
 
-Sistema de Autenticación: Crear el registro e inicio de sesión para profesores.
+  * **Fundamento Pedagógico & Tesis (DUA):** Nohemy Carreo (Terapista Psicosocial)
+  * **Desarrollo Full-Stack & Ingeniería:** Luis Peña (Desarrollador de Software)
 
-Gestión de Estudiantes: Permitir que un profesor pueda agregar, ver y editar la información de sus estudiantes (y sus personajes favoritos).
+-----
 
-Creación de Plantillas (Inicial): Desarrollar 1 o 2 plantillas de actividades básicas (ej: "Completa la frase con [Personaje]", "Ayuda a [Personaje] a contar hasta 10").
+## 💻 Puesta en Marcha (Para Desarrolladores)
 
-Generador de Actividades: Crear la función principal donde el profesor selecciona un estudiante, una plantilla, y el sistema genera la actividad personalizada.
+El proyecto utiliza una arquitectura monolítica con **Bun** como gestor de paquetes y runtime.
 
-Exportar a PDF: Implementar una función para que la actividad generada se pueda descargar o imprimir.
+### 1\. Requisitos
 
-Fase 3: Pruebas y Mejoras
-Pruebas Iniciales: Probar el flujo completo con datos de ejemplo.
+  * [Bun](https://bun.sh/) (v1.x o superior)
+  * PostgreSQL (instancia local o remota)
 
-Feedback: (Idealmente) Mostrar el prototipo a algunos profesores para obtener sus opiniones.
+### 2\. Configuración del Entorno (`.env`)
 
-Iteración: Mejorar las funcionalidades existentes y corregir errores.
+Crea un archivo `.env` en la carpeta `server/` con la siguiente estructura:
 
-4. Estructura de Carpetas Propuesta
-/
-├── client/ (o frontend/)  # Todo el código de React
-│   ├── public/
-│   └── src/
-│       ├── components/    # Componentes reutilizables (botones, tarjetas)
-│       ├── pages/         # Páginas principales (Login, Dashboard, etc.)
-│       └── ...
-├── server/ (o backend/)   # Todo el código de Node.js/Express
-│   ├── controllers/
-│   ├── models/
-│   ├── routes/
-│   └── index.js
-├── .gitignore
-└── README.md
+```env
+# Configuración de Base de Datos
+DATABASE_URL="postgres://usuario:contraseña@host:puerto/nombre_db"
+
+# Secreto para la autenticación JWT
+JWT_SECRET="TuSecretoMuyLargoYSeguro"
+```
+
+### 3\. Instalación e Inicialización
+
+Ejecuta estos comandos desde la carpeta raíz del proyecto (`dua-conecta/`):
+
+1.  **Instalar dependencias:**
+
+    ```bash
+    bun install
+    ```
+
+2.  **Inicializar la base de datos (con datos de ejemplo):**
+    *Asegúrate de que tu DB esté corriendo y la `DATABASE_URL` sea correcta.*
+
+    ```bash
+    bun run server/seed.ts
+    ```
+
+3.  **Ejecutar el servidor (API y Auth):**
+
+    ```bash
+    bun run server/index.ts --watch 
+    ```
+
+4.  **Ejecutar el Frontend (SvelteKit):**
+
+    ```bash
+    cd client
+    bun run dev
+    ```
+
+El frontend estará disponible en `http://localhost:5173/` y el backend en el puerto configurado (ej. `http://localhost:3000`).
