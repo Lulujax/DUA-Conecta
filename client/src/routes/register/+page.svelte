@@ -1,13 +1,15 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
-    // --- ESTE ES EL AGREGADO CLAVE ---
     import { PUBLIC_API_URL } from '$env/static/public';
 
-    // --- ESTADO DEL COMPONENTE ---
     let isLoading = false;
     let passwordFieldType = 'password';
     let confirmPasswordFieldType = 'password';
-    let formError = ''; // Variable para guardar mensajes de error
+    let formError = '';
+    
+    // NUEVO: Estado del checkbox legal
+    let acceptedTerms = false;
+
     let formData = {
         name: '',
         email: '',
@@ -15,7 +17,6 @@
         confirmPassword: ''
     };
 
-    // --- FUNCIONES ---
     function togglePasswordVisibility() {
         passwordFieldType = passwordFieldType === 'password' ? 'text' : 'password';
     }
@@ -24,25 +25,25 @@
         confirmPasswordFieldType = confirmPasswordFieldType === 'password' ? 'text' : 'password';
     }
 
-    // --- LÓGICA DE ENVÍO DEL FORMULARIO ---
     async function handleSubmit() {
-        isLoading = true;
-        formError = ''; // Resetea el error en cada intento
-
-        // 1. Validación simple en el frontend
-        if (formData.password !== formData.confirmPassword) {
-            formError = 'Las contraseñas no coinciden.';
-            isLoading = false;
-            return; // Detiene el envío
+        // VALIDACIÓN PREVIA
+        if (!acceptedTerms) {
+            formError = 'Debes aceptar los Términos y Condiciones para continuar.';
+            return;
         }
 
+        if (formData.password !== formData.confirmPassword) {
+            formError = 'Las contraseñas no coinciden.';
+            return;
+        }
+
+        isLoading = true;
+        formError = '';
+
         try {
-            // 2. Enviamos los datos al backend usando fetch (CON LA INTEGRACIÓN DE LA VARIABLE)
             const response = await fetch(`${PUBLIC_API_URL}/auth/register`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: formData.name,
                     email: formData.email,
@@ -50,33 +51,26 @@
                 }),
             });
 
-            // 3. Manejamos la respuesta del servidor
             if (!response.headers.get('content-type')?.includes('application/json')) {
-                throw new Error(`Respuesta inesperada del servidor. Código: ${response.status}`);
+                throw new Error(`Respuesta inesperada. Código: ${response.status}`);
             }
             
             const result = await response.json();
 
             if (!response.ok) {
-                // Si el servidor responde con un error (ej: email ya existe), lo mostramos
-                throw new Error(result.error || 'Ocurrió un error al registrar el usuario.');
+                throw new Error(result.error || 'Error al registrar.');
             }
 
-            // 4. Si todo salió bien, redirigimos al login para que inicie sesión
             alert('¡Registro exitoso! Por favor, inicia sesión.');
             await goto('/login');
 
         } catch (error) {
-            // Si hay un error en la comunicación o del servidor, lo mostramos
-            if (error instanceof SyntaxError) {
-                formError = "Error: Respuesta inesperada del servidor.";
-            } else if (error instanceof Error) {
+            if (error instanceof Error) {
                 formError = error.message;
             } else {
-                formError = "Un error desconocido ocurrió."
+                formError = "Error desconocido."
             }
         } finally {
-            // Pase lo que pase, detenemos la animación de carga
             isLoading = false;
         }
     }
@@ -109,12 +103,8 @@
                 <label for="password">Contraseña</label>
                 <div class="password-group">
                     <input type={passwordFieldType} id="password" name="password" required placeholder="Mínimo 8 caracteres" bind:value={formData.password} />
-                     <button type="button" class="password-toggle" on:click={togglePasswordVisibility} aria-label="Mostrar u ocultar contraseña">
-                        {#if passwordFieldType === 'password'}
-                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                        {:else}
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
-                        {/if}
+                     <button type="button" class="password-toggle" on:click={togglePasswordVisibility}>
+                        {#if passwordFieldType === 'password'}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>{:else}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>{/if}
                     </button>
                 </div>
             </div>
@@ -122,21 +112,24 @@
                 <label for="confirm-password">Confirmar Contraseña</label>
                 <div class="password-group">
                     <input type={confirmPasswordFieldType} id="confirm-password" name="confirm-password" required placeholder="Repite tu contraseña" bind:value={formData.confirmPassword} />
-                     <button type="button" class="password-toggle" on:click={toggleConfirmPasswordVisibility} aria-label="Mostrar u ocultar contraseña">
-                        {#if confirmPasswordFieldType === 'password'}
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                        {:else}
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
-                        {/if}
+                     <button type="button" class="password-toggle" on:click={toggleConfirmPasswordVisibility}>
+                         {#if confirmPasswordFieldType === 'password'}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>{:else}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>{/if}
                     </button>
                 </div>
+            </div>
+
+            <div class="terms-group">
+                <input type="checkbox" id="terms" bind:checked={acceptedTerms} />
+                <label for="terms">
+                    He leído y acepto los <a href="/legal/terminos" target="_blank">Términos</a> y la <a href="/legal/privacidad" target="_blank">Política de Privacidad</a>.
+                </label>
             </div>
 
             {#if formError}
                  <p class="error-message">{formError}</p>
             {/if}
 
-            <button type="submit" class="btn-primary" disabled={isLoading}>
+            <button type="submit" class="btn-primary" disabled={isLoading || !acceptedTerms}>
                 {#if isLoading}
                     <div class="spinner"></div>
                 {:else}
@@ -152,7 +145,26 @@
 </div>
 
 <style>
-    .auth-card {
-        position: relative;
-    }
+    .auth-card { position: relative; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 24px; padding: 2.5rem; width: 100%; max-width: 450px; text-align: center; box-shadow: 0 10px 30px rgba(160,132,232,.1); }
+    .auth-wrapper { display: flex; justify-content: center; align-items: flex-start; padding: 6rem 1.5rem; min-height: 80vh; }
+    .back-link { position: absolute; top: 1.5rem; left: 1.5rem; display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: var(--text-light); font-weight: 600; font-size: .9rem; transition: color .3s ease; }
+    .back-link:hover { color: var(--primary-color); }
+    h2 { font-size: 2rem; font-weight: 800; color: var(--text-dark); margin: 0 0 .5rem 0; }
+    .subtitle { color: var(--text-light); margin-bottom: 2.5rem; }
+    .form-group { text-align: left; margin-bottom: 1.5rem; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: .5rem; font-size: .9rem; color: var(--text-dark); }
+    .form-group input { width: 100%; padding: .9rem 1rem; border-radius: 12px; border: 1px solid var(--border-color); background-color: var(--bg-section); font-size: 1rem; color: var(--text-dark); }
+    .password-group { position: relative; }
+    .password-group input { padding-right: 3rem; }
+    .password-toggle { position: absolute; top: 50%; right: .5rem; transform: translateY(-50%); background: 0 0; border: none; cursor: pointer; color: var(--text-light); }
+    .btn-primary { width: 100%; padding: .9rem; font-size: 1rem; margin-top: 1rem; border-radius: 50px; background: linear-gradient(45deg, var(--primary-color), var(--primary-hover)); color: white; border: none; font-weight: 700; cursor: pointer; transition: opacity 0.3s; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error-message { color: #e53e3e; background: rgba(229, 62, 62, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem; }
+    .switch-link { margin-top: 2rem; font-size: .9rem; color: var(--text-light); }
+    .switch-link a { color: var(--primary-color); font-weight: 600; text-decoration: none; }
+
+    /* Estilos del Checkbox Legal */
+    .terms-group { display: flex; align-items: flex-start; gap: 0.8rem; text-align: left; margin-bottom: 1.5rem; font-size: 0.9rem; color: var(--text-light); }
+    .terms-group input { margin-top: 0.25rem; cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary-color); }
+    .terms-group a { color: var(--primary-color); text-decoration: underline; }
 </style>

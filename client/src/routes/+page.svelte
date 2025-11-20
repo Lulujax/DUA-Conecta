@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import heroImage from '$lib/images/hero-image.jpg';
+  import heroImage from '$lib/images/hero-image.jpg'; // Asegúrate de que esta imagen exista
 
   onMount(() => {
     const sections = document.querySelectorAll('.section');
@@ -117,7 +117,7 @@
         <h2 class="section-title">Lo que dicen los Docentes</h2>
       </div>
       <div class="testimonial-card">
-          <img src="https://placehold.co/80x80/E2E8F0/4A5568?text= profe" alt="Foto de una profesora"/>
+          <img src="https://placehold.co/80x80/E2E8F0/4A5568?text=Profe" alt="Foto de una profesora"/>
           <blockquote>
               "DUA-Conecta ha cambiado mi forma de planificar. Lo que antes me tomaba toda la tarde del domingo, ahora lo hago en 15 minutos. Mis niños están más enganchados que nunca."
           </blockquote>
@@ -154,16 +154,16 @@
         <div class="footer-column">
           <h4>Recursos</h4>
           <ul>
-            <li><a href="#_">Manual de Usuario</a></li>
-            <li><a href="#_">FAQ</a></li>
-            <li><a href="#_">Contacto</a></li>
+            <li><a href="/recursos/manual">Manual de Usuario</a></li>
+            <li><a href="/recursos/faq">FAQ</a></li>
+            <li><a href="/contacto">Contacto</a></li>
           </ul>
         </div>
         <div class="footer-column">
           <h4>Legal</h4>
           <ul>
-            <li><a href="#_">Términos del Servicio</a></li>
-            <li><a href="#_">Política de Privacidad</a></li>
+            <li><a href="/legal/terminos">Términos del Servicio</a></li>
+            <li><a href="/legal/privacidad">Política de Privacidad</a></li>
           </ul>
         </div>
       </div>
@@ -231,6 +231,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
 .footer-column ul a { color: var(--text-light); text-decoration: none; transition: color 0.3s ease; }
 .footer-column ul a:hover { color: var(--primary-color); }
 .footer-bottom { border-top: 1px solid var(--border-color); margin-top: 3rem; padding-top: 2rem; text-align: center; color: var(--text-light); font-size: 0.9rem; }
+
 @media (min-width: 576px) { .footer-grid { grid-template-columns: 2fr 1fr; } }
 @media (min-width: 768px) {
     .navigation { display: flex; gap: 1.5rem; }
@@ -256,4 +257,11 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
   .step-arrow { transform: rotate(90deg); margin: 1rem 0; }
   .footer-grid { grid-template-columns: 1fr; }
 }
+
+/* ANIMACIONES Y UTILIDADES */
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-15px); } }
+@keyframes blob-morph { 0%, 100% { border-radius: 65% 35% 55% 45% / 48% 45% 55% 52%; } 50% { border-radius: 35% 65% 45% 55% / 58% 55% 45% 42%; } }
+.section { opacity: 0; transform: translateY(30px); transition: opacity 0.6s ease-out, transform 0.6s ease-out; }
+.section.visible { opacity: 1; transform: translateY(0); }
 </style>
