@@ -1,17 +1,35 @@
 <script lang="ts">
-    // Recibimos los datos que trajo el archivo +page.ts
-    /** @type {import('./$types').PageData} */
-    export let data;
+    import { onMount } from 'svelte';
+    import { api } from '$lib/api';
+    import { toast } from '$lib/stores/toast.svelte';
+    import { fade, fly } from 'svelte/transition';
 
-    // Extraemos las plantillas de la data recibida
-    let { allTemplates } = data;
-
+    // ESTADO: Empezamos vacío esperando datos del servidor
+    let allTemplates: Array<any> = [];
+    let isLoading = true;
     let selectedCategory = 'Todas';
     let searchQuery = '';
 
-    const filterCategories = ['Todas', 'Conducta', 'Matemáticas', 'Lectoescritura'];
+    // FILTROS: Incluimos 'Inglés'
+    const filterCategories = ['Todas', 'Conducta', 'Matemáticas', 'Lectoescritura', 'Inglés'];
 
-    // Filtro reactivo (Igual que antes, pero ahora instantáneo)
+    // CARGA DE DATOS REALES
+    onMount(async () => {
+        try {
+            // Petición al backend (que ahora lee de la DB llena por seed.ts)
+            const response = await api.get('/templates');
+            if (response.templates) {
+                allTemplates = response.templates;
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error('No se pudo cargar la biblioteca.');
+        } finally {
+            isLoading = false;
+        }
+    });
+
+    // LÓGICA DE FILTRADO
     $: filteredTemplates = allTemplates.filter(t => {
         const matchesCategory = selectedCategory === 'Todas' || t.category === selectedCategory;
         const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -38,31 +56,38 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" placeholder="Buscar plantillas..." bind:value={searchQuery} />
       </div>
+      
        <div class="filters">
             {#each filterCategories as category}
-                <button class:active={selectedCategory === category} on:click={() => setFilter(category)}>
+                <button class:active={selectedCategory === category} onclick={() => setFilter(category)}>
                     {category}
                 </button>
             {/each}
         </div>
   </div>
 
-  {#if filteredTemplates.length === 0}
-      <div class="empty-state-wrapper section visible">
+  {#if isLoading}
+      <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Cargando biblioteca...</p>
+      </div>
+  {:else if filteredTemplates.length === 0}
+      <div class="empty-state-wrapper section visible" in:fade>
           <div class="empty-state-icon">🧐</div>
           <h2>No se encontraron resultados</h2>
           <p>Intenta con otra categoría o término de búsqueda.</p>
       </div>
   {:else}
       <div class="template-grid">
-          {#each filteredTemplates as template (template.id)}
-              <a href="/editor/{template.id}" class="template-card">
+          {#each filteredTemplates as template, i (template.id)}
+              <a href="/editor/{template.id}" class="template-card" in:fly={{ y: 20, duration: 400, delay: i * 50 }}>
                   <div class="thumbnail">
                       {#if template.thumbnail_url}
-                          <img src={template.thumbnail_url} alt={template.name} class="thumbnail-image" />
+                          <img src={template.thumbnail_url} alt={template.name} class="thumbnail-image" loading="lazy" />
                       {:else}
                         <span class="thumbnail-placeholder">{template.name}</span>
                       {/if}
+                      
                       <div class="hover-overlay">
                           <p>{template.description || "Sin descripción disponible."}</p>
                           <span class="btn-use">Usar Plantilla</span>
@@ -79,7 +104,6 @@
 </main>
 
 <style>
-    /* (Mantén los mismos estilos que tenías antes, no han cambiado) */
     main { max-width: 1200px; margin: 0 auto; padding: 4rem 1.5rem; }
     .library-header { text-align: center; margin-bottom: 3rem; }
     .library-header h1 { font-size: 2.8rem; font-weight: 800; color: var(--text-dark); margin-bottom: 0.5rem; }
@@ -101,8 +125,11 @@
     .template-card:hover .thumbnail-image { transform: scale(1.05); }
     .thumbnail-placeholder { font-size: 0.9rem; font-weight: 600; color: var(--text-light); }
     .card-content { padding: 1.5rem; }
-    .card-content h4 { margin: 0 0 0.5rem 0; font-size: 1.25rem; font-weight: 700; }
+    .card-content h4 { margin: 0 0 0.5rem 0; font-size: 1.2rem; font-weight: 700; }
     .card-content p { margin: 0; color: var(--text-light); font-size: 0.9rem; }
+    .loading-state { text-align: center; padding: 4rem; }
+    .spinner { width: 30px; height: 30px; border: 4px solid var(--border-color); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .empty-state-wrapper { text-align: center; padding: 4rem; border: 1px dashed var(--border-color); border-radius: 20px; background-color: var(--bg-card); }
     .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; }
     

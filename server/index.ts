@@ -1,4 +1,4 @@
-import { Elysia, t } from 'elysia'
+import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
 import { jwt } from '@elysiajs/jwt'
 import postgres from 'postgres'
@@ -6,62 +6,68 @@ import { z } from 'zod'
 import { Resend } from 'resend'
 import { randomBytes } from 'crypto'
 
-// 1. Configuración .ENV
+// --- 1. CONFIGURACIÓN .ENV ---
 const envFile = Bun.file('.env');
 if (await envFile.exists()) {
     const text = await envFile.text();
     for (const line of text.split('\n')) {
         const match = line.match(/^\s*([\w_]+)\s*=\s*(.*)?\s*$/);
         if (match) {
-            const key = match[1];
             let value = match[2] ? match[2].trim() : '';
             if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
                 value = value.slice(1, -1);
             }
-            process.env[key] = value;
+            process.env[match[1]] = value;
         }
     }
 }
 
 if (!process.env.JWT_SECRET || !process.env.DATABASE_URL) {
-    console.error("❌ FALTA .ENV (JWT_SECRET o DATABASE_URL)");
+    console.error("❌ ERROR: Faltan variables en .env");
     process.exit(1);
 }
 
-// 2. Base de Datos
+// --- 2. DETECCIÓN DE ENTORNO ---
+const isRemoteDB = !process.env.DATABASE_URL.includes('localhost') && !process.env.DATABASE_URL.includes('127.0.0.1');
+// Si estamos en Render, esta variable existe. Si no, asumimos local.
+const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
+
+console.log(`🔌 DB Remota: ${isRemoteDB ? 'SÍ' : 'NO'}`);
+console.log(`🌍 Modo Producción: ${isProduction ? 'SÍ' : 'NO'}`);
+
 const sql = postgres(process.env.DATABASE_URL, { 
-    ssl: process.env.DATABASE_URL.includes('localhost') ? false : 'require' 
+    ssl: isRemoteDB ? { rejectUnauthorized: false } : false 
 });
 
-// 3. Inicializador DB
-async function initDB() {
-    try {
-        console.log("🏗️ Verificando tablas...");
-        await sql`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT, email TEXT UNIQUE, password_hash TEXT, created_at TIMESTAMP DEFAULT NOW())`;
-        await sql`CREATE TABLE IF NOT EXISTS password_reset_tokens (user_id INT, token TEXT, expires_at TIMESTAMP)`;
-        await sql`CREATE TABLE IF NOT EXISTS templates (id SERIAL PRIMARY KEY, name TEXT, category TEXT, thumbnail_url TEXT, description TEXT, base_elements JSONB, created_at TIMESTAMP DEFAULT NOW())`;
-        await sql`CREATE TABLE IF NOT EXISTS saved_activities (id SERIAL PRIMARY KEY, user_id INT, name TEXT, template_id TEXT, elements JSONB, preview_img TEXT, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW())`;
-        console.log("✅ Tablas listas.");
-    } catch (e) {
-        console.error("Error DB init:", e);
-    }
-}
-await initDB();
-
-// 4. La APP Elysia
+// --- 3. APP ---
 const app = new Elysia()
-    .use(cors({
-        origin: ['http://localhost:5173', 'https://dua-conecta-j1pn.vercel.app'],
+   // CORS MEJORADO: Permite cualquier origen en desarrollo (origin: true)
+   // Esto evita problemas si entras como 127.0.0.1 vs localhost
+   .use(cors({
+        origin: isProduction 
+            ? ['https://dua-conecta-j1pn.vercel.app'] 
+            : true, 
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
-        allowedHeaders: ['Content-Type', 'Authorization']
     }))
     .use(jwt({
         name: 'jwt',
         secret: process.env.JWT_SECRET!
     }))
     .derive(async ({ jwt, cookie, headers }) => {
-        const token = cookie.auth_token?.value || headers.authorization?.slice(7);
-        return { profile: token ? await jwt.verify(token) : null };
+        let token = cookie.auth_token?.value;
+        if (!token && headers.authorization?.startsWith('Bearer ')) {
+            token = headers.authorization.substring(7);
+        }
+        if (!token) return { profile: null };
+        
+        try {
+            const profile = await jwt.verify(token);
+            return { profile };
+        } catch (e) {
+            return { profile: null };
+        }
     })
 
     // --- RUTAS PÚBLICAS ---
@@ -83,12 +89,26 @@ const app = new Elysia()
         .post('/login', async ({ body, jwt, cookie, set }) => {
             const { email, password } = body as any;
             const [user] = await sql`SELECT * FROM users WHERE email = ${email}`;
+            
             if (!user || !(await Bun.password.verify(password, user.password_hash))) {
                 set.status = 401; return { error: 'Credenciales inválidas' };
             }
+            
             const token = await jwt.sign({ userId: user.id, name: user.name });
-            cookie.auth_token.set({ value: token, httpOnly: true, path: '/', maxAge: 604800, secure: true, sameSite: 'none' });
-            return { success: true, user: { name: user.name, email: user.email } };
+            
+            // COOKIE SUPER ROBUSTA PARA LOCALHOST
+            cookie.auth_token.set({
+                value: token,
+                httpOnly: true,
+                // En local, secure debe ser FALSE para que funcione con http://
+                secure: isProduction, 
+                // 'lax' es necesario para que Chrome acepte la cookie en local
+                sameSite: isProduction ? 'none' : 'lax', 
+                maxAge: 7 * 86400, // 7 días
+                path: '/'
+            });
+
+            return { success: true, user: { name: user.name, email: user.email }, token }; 
         })
         .post('/register', async ({ body, set }) => {
             const { name, email, password } = body as any;
@@ -109,7 +129,6 @@ const app = new Elysia()
         })
         .get('/activities', async ({ profile }) => {
             const userId = (profile as any).userId;
-            // Consulta con JOIN para traer datos de la plantilla
             const activities = await sql`
                 SELECT a.id, a.name, a.template_id, a.updated_at, a.preview_img, t.thumbnail_url, t.category
                 FROM saved_activities a

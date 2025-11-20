@@ -2,7 +2,7 @@
     <div class="loader-content">
         <div class="spinner"></div>
         <h2>Cargando...</h2>
-        <p>Estamos preparando todo para ti.</p>
+        <p>Estamos preparando tu actividad.</p>
     </div>
 </div>
 
