@@ -169,6 +169,31 @@ const app = new Elysia()
             await sql`DELETE FROM saved_activities WHERE id=${params.id} AND user_id=${userId}`;
             return { success: true };
         })
+        // --- NUEVA RUTA: BUSCADOR DE IMÁGENES (PIXABAY) ---
+        .get('/pixabay', async ({ query, set }) => {
+            const q = query.q as string;
+            if (!q) { return { hits: [] }; }
+            
+            const apiKey = process.env.PIXABAY_API_KEY;
+            if (!apiKey) { 
+                set.status = 500; 
+                return { error: "Falta configuración de Pixabay en el servidor." }; 
+            }
+
+            try {
+                // Pedimos a Pixabay (imágenes seguras para niños: safesearch=true)
+                // Buscamos vectores e ilustraciones que encajan mejor con tu estilo escolar
+                const url = `https://pixabay.com/api/?key=${apiKey}&q=${encodeURIComponent(q)}&lang=es&image_type=all&safesearch=true&per_page=20`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                return data; // Devolvemos el JSON de Pixabay tal cual
+            } catch (error) {
+                console.error("Error Pixabay:", error);
+                set.status = 500;
+                return { error: "Error al conectar con Pixabay" };
+            }
+        })
     )
     .listen(process.env.PORT || 3000);
 
