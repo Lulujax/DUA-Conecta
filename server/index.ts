@@ -43,27 +43,24 @@ const sql = postgres(process.env.DATABASE_URL, {
 // --- 3. APP ---
 const app = new Elysia()
    .use(cors({
-        // *** AQUÍ ESTABA EL PROBLEMA ***
-        // Actualizamos la lista de dominios permitidos:
+        // CORRECCIÓN CORS: AÑADIDO 127.0.0.1 para compatibilidad local
         origin: [
-            'http://localhost:5173',               // Tu local
-            'https://dua-conecta.vercel.app',      // TU NUEVO DOMINIO
-            'https://dua-conecta-j1pn.vercel.app'  // (Opcional: dejamos el viejo por si acaso)
+            'http://localhost:5173',               
+            'http://127.0.0.1:5173',
+            'https://dua-conecta.vercel.app',      
+            'https://dua-conecta-j1pn.vercel.app'
         ], 
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
-        credentials: true, // IMPORTANTE para las cookies
+        credentials: true,
     }))
     .use(jwt({
         name: 'jwt',
         secret: process.env.JWT_SECRET!
     }))
-    .derive(async ({ jwt, cookie, headers }) => {
+    .derive(async ({ jwt, cookie }) => {
         let token = cookie.auth_token?.value;
-        // Soporte legacy para Bearer token (por si acaso)
-        if (!token && headers.authorization?.startsWith('Bearer ')) {
-            token = headers.authorization.substring(7);
-        }
+        
         if (!token) return { profile: null };
         
         try {
@@ -115,7 +112,7 @@ const app = new Elysia()
                 path: '/'
             });
 
-            return { success: true, user: { name: user.name, email: user.email }, token }; 
+            return { success: true, user: { name: user.name, email: user.email } }; 
         })
         .post('/register', async ({ body, set }) => {
             const { name, email, password } = body as any;
@@ -136,7 +133,6 @@ const app = new Elysia()
         })
         .get('/activities', async ({ profile }) => {
             const userId = (profile as any).userId;
-            // JOIN para traer la imagen de la plantilla original
             const activities = await sql`
                 SELECT a.id, a.name, a.template_id, a.updated_at, a.preview_img, t.thumbnail_url, t.category
                 FROM saved_activities a
@@ -149,7 +145,7 @@ const app = new Elysia()
         .get('/activities/:id', async ({ profile, params, set }) => {
              const userId = (profile as any).userId;
              const [act] = await sql`SELECT * FROM saved_activities WHERE id = ${params.id} AND user_id = ${userId}`;
-             if(!act) { set.status=404; return {error:'No existe'}; }
+             if(!act) { set.status = 404; return {error:'No existe'}; }
              return { activity: act };
         })
         .post('/activities/save', async ({ profile, body }) => {
@@ -169,7 +165,26 @@ const app = new Elysia()
             await sql`DELETE FROM saved_activities WHERE id=${params.id} AND user_id=${userId}`;
             return { success: true };
         })
-        // --- NUEVA RUTA: BUSCADOR DE IMÁGENES (PIXABAY) ---
+        .post('/user/change-password', async ({ profile, body, set }) => {
+            const { currentPassword, newPassword } = body as any;
+            const userId = (profile as any).userId;
+
+            const [user] = await sql`SELECT id, password_hash FROM users WHERE id = ${userId}`;
+            if (!user || !(await Bun.password.verify(currentPassword, user.password_hash))) {
+                set.status = 401; 
+                return { error: 'Contraseña actual incorrecta.' };
+            }
+
+            if (!newPassword || newPassword.length < 8) {
+                set.status = 400; 
+                return { error: 'La nueva contraseña debe tener al menos 8 caracteres.' };
+            }
+            
+            const hashed = await Bun.password.hash(newPassword);
+            await sql`UPDATE users SET password_hash = ${hashed} WHERE id = ${userId}`;
+
+            return { success: true, message: 'Contraseña actualizada con éxito.' };
+        })
         .get('/pixabay', async ({ query, set }) => {
             const q = query.q as string;
             if (!q) { return { hits: [] }; }
@@ -181,13 +196,11 @@ const app = new Elysia()
             }
 
             try {
-                // Pedimos a Pixabay (imágenes seguras para niños: safesearch=true)
-                // Buscamos vectores e ilustraciones que encajan mejor con tu estilo escolar
                 const url = `https://pixabay.com/api/?key=${apiKey}&q=${encodeURIComponent(q)}&lang=es&image_type=all&safesearch=true&per_page=20`;
                 
                 const response = await fetch(url);
                 const data = await response.json();
-                return data; // Devolvemos el JSON de Pixabay tal cual
+                return data;
             } catch (error) {
                 console.error("Error Pixabay:", error);
                 set.status = 500;

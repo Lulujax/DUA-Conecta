@@ -32,13 +32,13 @@ const sql = postgres(dbUrl, {
     connect_timeout: 60 
 });
 
-console.log("🌱 Restaurando TODAS las plantillas (Originales + Nuevas)...");
+console.log("🌱 Restaurando TODAS las plantillas (Centradas y Corregidas)...");
 
 // =====================================================================
 //  HELPERS DE DISEÑO (ENCABEZADOS Y PIES)
 // =====================================================================
 
-// Encabezado Español (Expandido para no cortar texto)
+// Encabezado Español
 const createHeader = () => [
     { id: 5001, type: 'text', content: 'Nombre:', x: 40, y: 40, width: 70, height: 20, fontSize: 14, color: '#000000', isBold: true, textAlign: 'left', fontFamily: 'Arial', z: 1 },
     { id: 5002, type: 'text', content: '_______________________', x: 115, y: 40, width: 200, height: 20, fontSize: 14, color: '#000000', textAlign: 'left', fontFamily: 'Arial', z: 1 },
@@ -58,38 +58,31 @@ const createHeaderEN = () => [
     { id: 5006, type: 'text', content: '_______', x: 565, y: 40, width: 100, height: 20, fontSize: 14, color: '#000000', textAlign: 'left', fontFamily: 'Arial', z: 1 }
 ];
 
-// Pie de página "Gana tu ficha"
+// Pie de página
 const createFooter = (y) => [
     { id: 5998, type: 'text', content: '¡Gana tu ficha aquí!', x: 400, y: y, width: 150, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'right', fontFamily: 'Arial', z: 1 },
     { id: 5999, type: 'text', content: '____________', x: 560, y: y, width: 100, height: 20, fontSize: 12, color: '#000000', textAlign: 'left', fontFamily: 'Arial', z: 1 }
 ];
 
-// --- GENERADOR DE BLOQUE MATEMÁTICO (Alineado y Ajustado) ---
+// --- HELPER: BLOQUE MATEMÁTICO ---
 const mkMathBlock = (idBase, x, y, n1, n2, operator, width = 140, fontSize = 35) => {
     const height = 140;
     const lineY = y + 90; 
     const paddingRight = 30;
-
     return [
-        // Caja
         { id: idBase, type: 'shape', shapeType: 'rectangle', x: x, y: y, width: width, height: height, stroke: '#000000', strokeWidth: 3, fill: 'transparent', z: 1 },
-        // Línea
         { id: idBase + 1, type: 'shape', shapeType: 'line', x: x, y: lineY, width: width, height: 2, stroke: '#000000', strokeWidth: 2, z: 2 },
-        // Número Superior (Alineado derecha)
         { id: idBase + 2, type: 'text', content: n1, x: x, y: y + 10, width: width - paddingRight, height: 45, fontSize: fontSize, textAlign: 'right', fontFamily: 'Arial', z: 3 },
-        // Signo
         { id: idBase + 3, type: 'text', content: operator, x: x + 15, y: y + 50, width: 20, height: 40, fontSize: fontSize, textAlign: 'left', fontFamily: 'Arial', z: 3 },
-        // Número Inferior (Alineado derecha)
         { id: idBase + 4, type: 'text', content: n2, x: x, y: y + 50, width: width - paddingRight, height: 45, fontSize: fontSize, textAlign: 'right', fontFamily: 'Arial', z: 3 },
     ];
 };
 
-// --- GENERADOR DE DEDOS (MANO + CAJAS) ---
+// --- HELPER: DEDOS ---
 const mkFingerBlock = (idBase, x, y, imgName) => {
     const handW = 100; const handH = 140;
     const boxSize = 70; const gap = 10;
     const handX = x + 10; const box1X = x + 130; const box2X = box1X + boxSize + gap;
-    
     return [
         { id: idBase, type: 'image', url: `/${imgName}`, x: handX, y: y + 10, width: handW, height: handH, z: 1 },
         { id: idBase + 1, type: 'shape', shapeType: 'rectangle', x: box1X, y: y + 20, width: boxSize, height: 60, stroke: '#000', strokeWidth: 2, fill: 'transparent', z: 1 },
@@ -101,12 +94,48 @@ const mkFingerBlock = (idBase, x, y, imgName) => {
     ];
 };
 
+// --- HELPER: RELOJ ANALÓGICO ---
+const mkClockBlock = (idBase, x, y) => {
+    const size = 120;
+    const center = size / 2;
+    return [
+        { id: idBase, type: 'shape', shapeType: 'circle', x: x, y: y, width: size, height: size, stroke: '#000', strokeWidth: 3, fill: 'transparent', z: 1 },
+        { id: idBase+1, type: 'shape', shapeType: 'circle', x: x + center - 3, y: y + center - 3, width: 6, height: 6, stroke: '#000', fill: '#000', z: 2 },
+        { id: idBase+2, type: 'shape', shapeType: 'line', x: x + center, y: y + 5, width: 0, height: 10, stroke: '#000', strokeWidth: 2, z: 2 }, 
+        { id: idBase+3, type: 'shape', shapeType: 'line', x: x + center, y: y + size - 15, width: 0, height: 10, stroke: '#000', strokeWidth: 2, z: 2 }, 
+        { id: idBase+4, type: 'shape', shapeType: 'line', x: x + 5, y: y + center, width: 10, height: 0, stroke: '#000', strokeWidth: 2, z: 2 }, 
+        { id: idBase+5, type: 'shape', shapeType: 'line', x: x + size - 15, y: y + center, width: 10, height: 0, stroke: '#000', strokeWidth: 2, z: 2 }, 
+        { id: idBase+6, type: 'shape', shapeType: 'rectangle', x: x + 10, y: y + size + 10, width: 100, height: 40, stroke: '#000', strokeWidth: 2, fill: 'transparent', z: 1 },
+        { id: idBase+7, type: 'text', content: ':', x: x + 55, y: y + size + 15, width: 10, height: 30, fontSize: 24, isBold: true, textAlign: 'center', z: 2 }
+    ];
+};
+
+// --- HELPER: CAJA DE SECUENCIA ---
+const mkSequenceStep = (idBase, x, y, title) => {
+    const boxW = 150; 
+    const boxH = 180;
+    return [
+        { id: idBase, type: 'text', content: title, x: x, y: y, width: boxW, height: 30, fontSize: 16, isBold: true, textAlign: 'center', z: 1 },
+        { id: idBase+1, type: 'shape', shapeType: 'rectangle', x: x, y: y + 35, width: boxW, height: boxH, stroke: '#333', strokeWidth: 2, fill: 'transparent', z: 1 },
+        { id: idBase+2, type: 'shape', shapeType: 'line', x: x + 10, y: y + boxH - 30, width: boxW - 20, height: 1, stroke: '#999', strokeWidth: 1, z: 1 },
+        { id: idBase+3, type: 'shape', shapeType: 'line', x: x + 10, y: y + boxH - 60, width: boxW - 20, height: 1, stroke: '#999', strokeWidth: 1, z: 1 },
+    ];
+};
+
+// --- HELPER: CHECKLIST ---
+const mkCheckItem = (idBase, x, y) => {
+    return [
+        { id: idBase, type: 'shape', shapeType: 'rectangle', x: x, y: y, width: 40, height: 40, stroke: '#000', strokeWidth: 3, fill: 'transparent', z: 1 },
+        { id: idBase+1, type: 'shape', shapeType: 'line', x: x + 60, y: y + 35, width: 500, height: 2, stroke: '#000', strokeWidth: 2, z: 1 },
+    ];
+};
+
 
 // =====================================================================
-//  DEFINICIÓN DE LAS 12 PLANTILLAS (COMPLETAS)
+//  DEFINICIÓN DE LAS PLANTILLAS
 // =====================================================================
 
-// --- 1. EL MONSTRUO DE LAS EMOCIONES ---
+// 1. MONSTRUO
 const monstruoElements = [
     ...createHeader(),
     { id: 4, type: 'text', content: 'El Monstruo de las Emociones', x: 40, y: 80, width: 620, height: 35, fontSize: 24, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
@@ -121,33 +150,27 @@ const monstruoElements = [
     ...createFooter(920)
 ];
 
-// --- 2. EMOCIONES CON LUPA ---
+// 2. LUPA
 const lupaElements = [
     { id: 1, type: 'text', content: 'EMOCIONES CON LUPA', x: 40, y: 40, width: 400, height: 40, fontSize: 28, color: '#3D246C', isBold: true, textAlign: 'left', fontFamily: 'Arial', z: 1},
     ...createHeader(), 
     { id: 4, type: 'text', content: 'Lee con atención cada situación. Une con una flecha la emoción que crees que encaja mejor.', x: 40, y: 110, width: 620, height: 50, fontSize: 14, color: '#000000', textAlign: 'left', fontFamily: 'Arial', z: 1 },
-    { id: 10, type: 'image', url: '/emocion-verguenza.png', x: 60, y: 180, width: 100, height: 80, z: 1},
-    { id: 11, type: 'text', content: 'VERGÜENZA', x: 60, y: 265, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
+    { id: 10, type: 'image', url: '/emocion-verguenza.png', x: 60, y: 180, width: 100, height: 80, z: 1}, { id: 11, type: 'text', content: 'VERGÜENZA', x: 60, y: 265, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
     { id: 12, type: 'text', content: 'La profe explicó el ejercicio, pero no entendí qué tenía que hacer.', x: 250, y: 210, width: 400, height: 70, fontSize: 14, color: '#000000', textAlign: 'left', fontFamily: 'Arial', z: 1},
-    { id: 20, type: 'image', url: '/emocion-orgullo.png', x: 60, y: 300, width: 100, height: 80, z: 1},
-    { id: 21, type: 'text', content: 'ORGULLO', x: 60, y: 385, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
+    { id: 20, type: 'image', url: '/emocion-orgullo.png', x: 60, y: 300, width: 100, height: 80, z: 1}, { id: 21, type: 'text', content: 'ORGULLO', x: 60, y: 385, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
     { id: 22, type: 'text', content: 'Quería explicar mi idea, pero nadie me escuchaba.', x: 250, y: 330, width: 400, height: 70, fontSize: 14, color: '#000000', textAlign: 'left', fontFamily: 'Arial', z: 1},
-    { id: 30, type: 'image', url: '/emocion-calma.png', x: 60, y: 420, width: 100, height: 80, z: 1},
-    { id: 31, type: 'text', content: 'CALMA', x: 60, y: 505, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
+    { id: 30, type: 'image', url: '/emocion-calma.png', x: 60, y: 420, width: 100, height: 80, z: 1}, { id: 31, type: 'text', content: 'CALMA', x: 60, y: 505, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
     { id: 32, type: 'text', content: 'Se me olvidó lo que iba a decir en voz alta y todos me miraron.', x: 250, y: 450, width: 400, height: 70, fontSize: 14, color: '#000000', textAlign: 'left', fontFamily: 'Arial', z: 1},
-    { id: 40, type: 'image', url: '/emocion-confusion.png', x: 60, y: 540, width: 100, height: 80, z: 1},
-    { id: 41, type: 'text', content: 'CONFUSIÓN', x: 60, y: 625, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
+    { id: 40, type: 'image', url: '/emocion-confusion.png', x: 60, y: 540, width: 100, height: 80, z: 1}, { id: 41, type: 'text', content: 'CONFUSIÓN', x: 60, y: 625, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
     { id: 42, type: 'text', content: 'Prometí ir al cumpleaños, pero me olvidé y no fui.', x: 250, y: 570, width: 400, height: 70, fontSize: 14, color: '#000000', textAlign: 'left', fontFamily: 'Arial', z: 1},
-    { id: 50, type: 'image', url: '/emocion-culpa.png', x: 60, y: 660, width: 100, height: 80, z: 1},
-    { id: 51, type: 'text', content: 'CULPA', x: 60, y: 745, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
+    { id: 50, type: 'image', url: '/emocion-culpa.png', x: 60, y: 660, width: 100, height: 80, z: 1}, { id: 51, type: 'text', content: 'CULPA', x: 60, y: 745, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
     { id: 52, type: 'text', content: 'Aprendí a montar en bici sin ayuda y me sentí muy feliz.', x: 250, y: 690, width: 400, height: 70, fontSize: 14, color: '#000000', textAlign: 'left', fontFamily: 'Arial', z: 1},
-    { id: 60, type: 'image', url: '/emocion-frustracion.png', x: 60, y: 780, width: 100, height: 80, z: 1},
-    { id: 61, type: 'text', content: 'FRUSTRACIÓN', x: 60, y: 865, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
+    { id: 60, type: 'image', url: '/emocion-frustracion.png', x: 60, y: 780, width: 100, height: 80, z: 1}, { id: 61, type: 'text', content: 'FRUSTRACIÓN', x: 60, y: 865, width: 100, height: 20, fontSize: 12, color: '#000000', isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 1},
     { id: 62, type: 'text', content: 'Estaba pintando sin prisa, con música bajita, y me sentía en paz.', x: 250, y: 810, width: 400, height: 70, fontSize: 14, color: '#000000', textAlign: 'left', fontFamily: 'Arial', z: 1},
     ...createFooter(920)
 ];
 
-// --- 3. ¿CÓMO TE AYUDO? ---
+// 3. AYUDA
 const c1_img = 40; const c1_txt = 190; const c2_img = 360; const c2_txt = 510; const lineW = 150;
 const ayudaElements = [
     ...createHeader(),
@@ -164,7 +187,7 @@ const ayudaElements = [
     ...createFooter(780)
 ];
 
-// --- 4. EL DADO DE LAS HISTORIAS ---
+// 4. DADO
 const CUBE_SIZE = 150; const ICON_SIZE = 100; const ICON_OFFSET = (CUBE_SIZE - ICON_SIZE) / 2;
 const SOLAPA_W = 150; const SOLAPA_H = 50; const X_CENTER = 275; const Y_START_DADO = 250; 
 const Y1 = Y_START_DADO, Y2 = Y1 + CUBE_SIZE, Y3 = Y2 + CUBE_SIZE, Y4 = Y3 + CUBE_SIZE;        
@@ -197,7 +220,7 @@ const dadoElements = [
     ...createFooter(900)
 ];
 
-// --- 5. BINGO ---
+// 5. BINGO
 const bingoY = 40; const gridYStart = 210; const rowH = 130; const gridW = 620; const gridX = 40;
 const row1Y = gridYStart, row2Y = row1Y + rowH, row3Y = row2Y + rowH, row4Y = row3Y + rowH, row5Y = row4Y + rowH;
 const colW = gridW / 5, textW = 110, txtOffX = (colW - textW) / 2, txtOffY = 82;
@@ -224,7 +247,7 @@ const bingoElements = [
     ...createFooter(910)
 ];
 
-// --- 6 & 7. CONTEO ---
+// 6. CONTEO (ES)
 const conteoY = 180; const conteoH = 160; const col1_X = 40; const col2_X = 350; 
 const c_r1 = conteoY; const c_r2 = c_r1 + conteoH; const c_r3 = c_r2 + conteoH; const c_r4 = c_r3 + conteoH; const c_r5 = c_r4 + conteoH;
 
@@ -241,6 +264,7 @@ const conteoSpanishElements = [
     ...createFooter(990)
 ];
 
+// 7. CONTEO (EN)
 const conteoEnglishElements = [
     ...createHeaderEN(),
     { id: 1, type: 'text', content: 'Finger Counting', x: 40, y: 90, width: 620, height: 40, fontSize: 36, isBold: true, textAlign: 'center', z: 10 },
@@ -254,7 +278,7 @@ const conteoEnglishElements = [
     ...createFooter(990)
 ];
 
-// --- 8, 9 & 10. RESTAS ---
+// 8, 9, 10. RESTAS
 const m_yStart = 190;
 const m_yGap = 170; 
 const col1 = 60; const col2 = 280; const col3 = 500;
@@ -293,9 +317,7 @@ const resta3Elements = [
     ...createFooter(960)
 ];
 
-
-// --- 10, 11 & 12. SUMAS (NUEVAS - IGUALES PERO CON +) ---
-// Suma 1 Cifra
+// 11, 12, 13. SUMAS
 const suma1Elements = [
     ...createHeader(),
     { id: 1, type: 'text', content: '¡A sumar!', x: 40, y: 90, width: 620, height: 50, fontSize: 42, isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 10 },
@@ -307,7 +329,6 @@ const suma1Elements = [
     ...createFooter(960)
 ];
 
-// Suma 2 Cifras
 const suma2Elements = [
     ...createHeader(),
     { id: 1, type: 'text', content: '¡A sumar!', x: 40, y: 90, width: 620, height: 50, fontSize: 42, isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 10 },
@@ -319,7 +340,6 @@ const suma2Elements = [
     ...createFooter(960)
 ];
 
-// Suma 3 Cifras
 const suma3Elements = [
     ...createHeader(),
     { id: 1, type: 'text', content: '¡A sumar!', x: 40, y: 90, width: 620, height: 50, fontSize: 42, isBold: true, textAlign: 'center', fontFamily: 'Arial', z: 10 },
@@ -328,6 +348,95 @@ const suma3Elements = [
     ...mkMathBlock(130, c1_w3, m_yStart + m_yGap, '410', '155', '+', w3), ...mkMathBlock(140, c2_w3, m_yStart + m_yGap, '122', '366', '+', w3), ...mkMathBlock(150, c3_w3, m_yStart + m_yGap, '505', '104', '+', w3),
     ...mkMathBlock(160, c1_w3, m_yStart + m_yGap * 2, '630', '120', '+', w3), ...mkMathBlock(170, c2_w3, m_yStart + m_yGap * 2, '215', '440', '+', w3), ...mkMathBlock(180, c3_w3, m_yStart + m_yGap * 2, '111', '777', '+', w3),
     ...mkMathBlock(190, c1_w3, m_yStart + m_yGap * 3, '234', '123', '+', w3), ...mkMathBlock(200, c2_w3, m_yStart + m_yGap * 3, '456', '111', '+', w3), ...mkMathBlock(210, c3_w3, m_yStart + m_yGap * 3, '100', '800', '+', w3),
+    ...createFooter(960)
+];
+
+// 14. ¿QUÉ HORA ES? (ES)
+const relojesElements = [
+    ...createHeader(),
+    { id: 1, type: 'text', content: '¿Qué hora es?', x: 40, y: 90, width: 620, height: 50, fontSize: 42, isBold: true, textAlign: 'center', z: 10 },
+    { id: 2, type: 'text', content: 'Dibuja las manecillas o escribe la hora digital.', x: 40, y: 140, width: 620, height: 30, fontSize: 16, textAlign: 'center', z: 10 },
+    
+    ...mkClockBlock(100, 80, 200),  ...mkClockBlock(110, 290, 200),  ...mkClockBlock(120, 500, 200),
+    ...mkClockBlock(130, 80, 450),  ...mkClockBlock(140, 290, 450),  ...mkClockBlock(150, 500, 450),
+    
+    ...createFooter(960)
+];
+
+// 15. WHAT TIME IS IT? (EN)
+const relojesEnglishElements = [
+    ...createHeaderEN(),
+    { id: 1, type: 'text', content: 'What time is it?', x: 40, y: 90, width: 620, height: 50, fontSize: 42, isBold: true, textAlign: 'center', z: 10 },
+    { id: 2, type: 'text', content: 'Draw the hands or write the digital time.', x: 40, y: 140, width: 620, height: 30, fontSize: 16, textAlign: 'center', z: 10 },
+    
+    ...mkClockBlock(100, 80, 200),  ...mkClockBlock(110, 290, 200),  ...mkClockBlock(120, 500, 200),
+    ...mkClockBlock(130, 80, 450),  ...mkClockBlock(140, 290, 450),  ...mkClockBlock(150, 500, 450),
+    
+    ...createFooter(960)
+];
+
+// 16. SECUENCIA DE HISTORIA (ES) - CENTRADO
+const secuenciaElements = [
+    ...createHeader(),
+    { id: 1, type: 'text', content: 'Secuencia de Historia', x: 40, y: 90, width: 620, height: 50, fontSize: 42, isBold: true, textAlign: 'center', z: 10 },
+    { id: 2, type: 'text', content: 'Dibuja o escribe lo que pasó en orden.', x: 40, y: 140, width: 620, height: 30, fontSize: 16, textAlign: 'center', z: 10 },
+
+    // Total ancho bloque: 150 + 30 + 150 + 30 + 150 = 510.
+    // Centrado en 700: Margen izq ~95.
+    // Caja 1 (x=95)
+    ...mkSequenceStep(100, 95, 200, "1. PRIMERO"),
+    // Flecha 1 (x=255)
+    { id: 150, type: 'shape', shapeType: 'arrow', x: 255, y: 300, width: 30, height: 20, stroke: '#000', strokeWidth: 4, z: 1 },
+    
+    // Caja 2 (x=295)
+    ...mkSequenceStep(200, 295, 200, "2. LUEGO"),
+    // Flecha 2 (x=455)
+    { id: 250, type: 'shape', shapeType: 'arrow', x: 455, y: 300, width: 30, height: 20, stroke: '#000', strokeWidth: 4, z: 1 },
+
+    // Caja 3 (x=495)
+    ...mkSequenceStep(300, 495, 200, "3. AL FINAL"),
+
+    { id: 400, type: 'text', content: 'Resumen / Dibujo Final:', x: 40, y: 500, width: 600, height: 30, fontSize: 16, isBold: true, textAlign: 'left', z: 1 },
+    { id: 401, type: 'shape', shapeType: 'rectangle', x: 40, y: 540, width: 620, height: 250, stroke: '#000', strokeWidth: 2, fill: 'transparent', z: 1 },
+
+    ...createFooter(960)
+];
+
+// 17. STORY SEQUENCE (EN) - CENTRADO
+const secuenciaEnglishElements = [
+    ...createHeaderEN(),
+    { id: 1, type: 'text', content: 'Story Sequence', x: 40, y: 90, width: 620, height: 50, fontSize: 42, isBold: true, textAlign: 'center', z: 10 },
+    { id: 2, type: 'text', content: 'Draw or write what happened in order.', x: 40, y: 140, width: 620, height: 30, fontSize: 16, textAlign: 'center', z: 10 },
+
+    ...mkSequenceStep(100, 95, 200, "1. FIRST"),
+    { id: 150, type: 'shape', shapeType: 'arrow', x: 255, y: 300, width: 30, height: 20, stroke: '#000', strokeWidth: 4, z: 1 },
+    
+    ...mkSequenceStep(200, 295, 200, "2. NEXT"),
+    { id: 250, type: 'shape', shapeType: 'arrow', x: 455, y: 300, width: 30, height: 20, stroke: '#000', strokeWidth: 4, z: 1 },
+
+    ...mkSequenceStep(300, 495, 200, "3. LAST"),
+
+    { id: 400, type: 'text', content: 'Summary / Final Drawing:', x: 40, y: 500, width: 600, height: 30, fontSize: 16, isBold: true, textAlign: 'left', z: 1 },
+    { id: 401, type: 'shape', shapeType: 'rectangle', x: 40, y: 540, width: 620, height: 250, stroke: '#000', strokeWidth: 2, fill: 'transparent', z: 1 },
+
+    ...createFooter(960)
+];
+
+// 18. MIS TAREAS
+const tareasElements = [
+    ...createHeader(),
+    { id: 1, type: 'text', content: 'Mis Tareas de Hoy', x: 40, y: 90, width: 620, height: 50, fontSize: 42, isBold: true, textAlign: 'center', z: 10 },
+    { id: 2, type: 'text', content: 'Marca las casillas cuando termines cada misión.', x: 40, y: 140, width: 620, height: 30, fontSize: 16, textAlign: 'center', z: 10 },
+
+    ...mkCheckItem(100, 60, 220),
+    ...mkCheckItem(200, 60, 320),
+    ...mkCheckItem(300, 60, 420),
+    ...mkCheckItem(400, 60, 520),
+    ...mkCheckItem(500, 60, 620),
+    ...mkCheckItem(600, 60, 720),
+
+    { id: 700, type: 'text', content: '¡Buen trabajo!', x: 250, y: 820, width: 200, height: 40, fontSize: 24, isBold: true, textAlign: 'center', color: '#16a34a', z: 1 },
+    
     ...createFooter(960)
 ];
 
@@ -340,7 +449,7 @@ const templates = [
     { name: 'El Dado de las Historias', category: 'Lectoescritura', thumbnail_url: '/thumbnail-dado.jpg', description: 'Crea historias.', base_elements: dadoElements },
     { name: 'BINGO de Palabras', category: 'Lectoescritura', thumbnail_url: '/thumbnail-bingo.jpg', description: 'Juego de vocabulario.', base_elements: bingoElements },
     
-    { name: 'Conteo con los dedos', category: 'Matemáticas', thumbnail_url: '/thumbnail-conteo.jpg', description: 'Cuenta y escribe.', base_elements: conteoSpanishElements },
+    { name: 'Conteo con los dedos', category: 'Matemáticas', thumbnail_url: '/thumbnail-conteo-es.jpg', description: 'Cuenta y escribe.', base_elements: conteoSpanishElements },
     { name: 'Finger Counting', category: 'Inglés', thumbnail_url: '/thumbnail-conteo-en.jpg', description: 'Count and write.', base_elements: conteoEnglishElements },
 
     { name: 'Resta 1 Cifra', category: 'Matemáticas', thumbnail_url: '/thumbnail-resta-1.jpg', description: 'Restas básicas.', base_elements: resta1Elements },
@@ -351,6 +460,13 @@ const templates = [
     { name: 'Suma 1 Cifra', category: 'Matemáticas', thumbnail_url: '/thumbnail-suma-1.jpg', description: 'Sumas básicas.', base_elements: suma1Elements },
     { name: 'Suma 2 Cifras', category: 'Matemáticas', thumbnail_url: '/thumbnail-suma-2.jpg', description: 'Sumas intermedias.', base_elements: suma2Elements },
     { name: 'Suma 3 Cifras', category: 'Matemáticas', thumbnail_url: '/thumbnail-suma-3.jpg', description: 'Sumas avanzadas.', base_elements: suma3Elements },
+
+    // NUEVAS
+    { name: '¿Qué hora es?', category: 'Matemáticas', thumbnail_url: '/thumbnail-relojes.jpg', description: 'Aprende las horas.', base_elements: relojesElements },
+    { name: 'What time is it?', category: 'Inglés', thumbnail_url: '/thumbnail-relojes.jpg', description: 'Learn the time.', base_elements: relojesEnglishElements },
+    { name: 'Secuencia de Historia', category: 'Lectoescritura', thumbnail_url: '/thumbnail-secuencia.jpg', description: 'Ordena eventos.', base_elements: secuenciaElements },
+    { name: 'Story Sequence', category: 'Inglés', thumbnail_url: '/thumbnail-secuencia.jpg', description: 'Order events.', base_elements: secuenciaEnglishElements },
+    { name: 'Mis Tareas de Hoy', category: 'Conducta', thumbnail_url: '/thumbnail-tareas.jpg', description: 'Organización diaria.', base_elements: tareasElements },
 ];
 
 async function main() {
@@ -362,7 +478,7 @@ async function main() {
             await sql`INSERT INTO templates (name, category, thumbnail_url, description, base_elements) VALUES (${t.name}, ${t.category}, ${t.thumbnail_url}, ${t.description}, ${sql.json(t.base_elements)})`;
             console.log(`   ✅ ${t.name}`);
         }
-        console.log("\n🎉 ¡LISTO! 12 Plantillas cargadas.");
+        console.log("\n🎉 ¡LISTO! 18 Plantillas cargadas.");
         process.exit(0);
     } catch (error) {
         console.error("❌ Error:", error);
