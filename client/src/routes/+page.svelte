@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import heroImage from '$lib/images/hero-image.jpg'; // Asegúrate de que esta imagen exista
+  import heroImage from '$lib/images/hero-image.jpg';
 
   onMount(() => {
     const sections = document.querySelectorAll('.section');
@@ -117,13 +117,13 @@
         <h2 class="section-title">Lo que dicen los Docentes</h2>
       </div>
       <div class="testimonial-card">
-          <img src="https://placehold.co/80x80/E2E8F0/4A5568?text=Profe" alt="Foto de una profesora"/>
+          <img src="https://placehold.co/80x80/E2E8F0/4A5568?text=JB" alt="Foto de Jhoan Bolivar"/>
           <blockquote>
-              "DUA-Conecta ha cambiado mi forma de planificar. Lo que antes me tomaba toda la tarde del domingo, ahora lo hago en 15 minutos. Mis niños están más enganchados que nunca."
+              "DUA-Conecta ha revolucionado mi aula. Lo que antes era una lucha constante para adaptar materiales, ahora es un proceso creativo y rápido. Mis alumnos están más motivados y yo tengo más tiempo para ellos."
           </blockquote>
           <cite>
-              <strong>Ana María Pérez</strong><br>
-              <span>Docente de Primaria, Valencia</span>
+              <strong>Profesor Jhoan Bolivar</strong><br>
+              <span>Docente de Educación Especial</span>
           </cite>
       </div>
     </section>

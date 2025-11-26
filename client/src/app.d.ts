@@ -22,28 +22,26 @@ declare global {
         y: number;
         width: number;
         height: number;
-        z: number; // Capa (z-index)
+        z: number; 
         rotation?: number;
         
-        // Propiedades de Texto
-        content?: string;
-        fontSize?: number;
-        fontFamily?: string;
-        color?: string; // Color del texto o borde
-        textAlign?: TextAlign;
-        isBold?: boolean;
-        isItalic?: boolean;
-        isUnderlined?: boolean;
-        lineHeight?: number;
+        // Propiedades de Texto (Rich Text)
+        content?: string;       
+        fontSize?: number;      
+        fontFamily?: string;    
+        color?: string;         
+        textAlign?: TextAlign;  
+        lineHeight?: number; 
 
         // Propiedades de Imagen
         url?: string;
         opacity?: number;
+        flipX?: boolean; 
 
         // Propiedades de Forma
         shapeType?: ShapeType;
-        stroke?: string;       // Color del borde
-        fill?: string | null;  // Color de fondo (null = transparente)
+        stroke?: string;       
+        fill?: string | null;  
         strokeWidth?: number;
     }
 }

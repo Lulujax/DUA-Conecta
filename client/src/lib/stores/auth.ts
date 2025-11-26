@@ -6,14 +6,14 @@ interface User {
     name: string;
     email?: string;
     id?: number;
-    // No guardamos el token aquí, solo info de perfil
+    // ELIMINADO: No token or sensitive data here
 }
 
 export const isAuthLoading = writable(true);
 
 function createAuthStore() {
     // 1. Intentamos recuperar la sesión del navegador al iniciar
-    let initialUser = null;
+    let initialUser: User | null = null;
     if (browser) {
         try {
             const stored = localStorage.getItem('user_profile');
@@ -45,8 +45,10 @@ function createAuthStore() {
                 const res = await api.get('/auth/me');
                 if (res.user) {
                     // Sesión válida: Actualizamos datos frescos
-                    set(res.user);
-                    localStorage.setItem('user_profile', JSON.stringify(res.user));
+                    const userData: User = res.user;
+                    set(userData);
+                    // CAMBIO: Guardamos solo la data no sensible
+                    localStorage.setItem('user_profile', JSON.stringify(userData));
                 } else {
                     // Sesión inválida: Limpiamos
                     throw new Error("Sesión expirada");
@@ -63,6 +65,7 @@ function createAuthStore() {
         loginSuccess: (userData: User) => {
             set(userData);
             if (browser) {
+                // CAMBIO: Guardamos solo la data no sensible
                 localStorage.setItem('user_profile', JSON.stringify(userData));
             }
             isAuthLoading.set(false);
@@ -75,7 +78,8 @@ function createAuthStore() {
                 set(null);
                 if (browser) {
                     localStorage.removeItem('user_profile');
-                    window.location.href = '/login';
+                    // Usamos window.location.href para asegurar limpieza de cookies y caché
+                    window.location.href = '/login'; 
                 }
             }
         }

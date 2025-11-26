@@ -1,5 +1,11 @@
-<script>
-    // No se requiere lógica compleja
+<script lang="ts">
+    let selectedCycle = 'Todos'; // Estado para el filtro
+
+    const filters = ['Todos', 'Primer Ciclo (1º-2º)', 'Segundo Ciclo (3º-4º)', 'Tercer Ciclo (5º-6º)'];
+
+    function setCycle(cycle: string) {
+        selectedCycle = cycle;
+    }
 </script>
 
 <svelte:head>
@@ -8,10 +14,23 @@
 
 <main>
     <header class="guide-header">
-        <h1>Guía Gráfica de Actividades Inclusivas</h1>
-        <p>Actividades prácticas para un aula diversa (1º a 6º Grado)</p>
+        <h1>Guía de Actividades Inclusivas</h1>
+        <p>Estrategias prácticas para un aula diversa</p>
     </header>
 
+    <div class="cycle-filters">
+        {#each filters as filter}
+            <button 
+                class="filter-btn" 
+                class:active={selectedCycle === filter}
+                onclick={() => setCycle(filter)}
+            >
+                {filter}
+            </button>
+        {/each}
+    </div>
+
+    {#if selectedCycle === 'Todos' || selectedCycle === 'Primer Ciclo (1º-2º)'}
     <section class="cycle-section">
         <h2 class="cycle-title">Primer Ciclo (1º y 2º Grado)</h2>
 
@@ -256,7 +275,9 @@
             </div>
         </div>
     </section>
+    {/if}
 
+    {#if selectedCycle === 'Todos' || selectedCycle === 'Segundo Ciclo (3º-4º)'}
     <section class="cycle-section">
         <h2 class="cycle-title">Segundo Ciclo (3º y 4º Grado)</h2>
 
@@ -502,7 +523,9 @@
             </div>
         </div>
     </section>
+    {/if}
 
+    {#if selectedCycle === 'Todos' || selectedCycle === 'Tercer Ciclo (5º-6º)'}
     <section class="cycle-section">
         <h2 class="cycle-title">Tercer Ciclo (5º y 6º Grado)</h2>
 
@@ -749,6 +772,7 @@
             </div>
         </div>
     </section>
+    {/if}
 
 </main>
 
@@ -760,55 +784,40 @@
         animation: fadeInUp 0.5s ease-out;
     }
 
-    .guide-header {
-        text-align: center;
-        margin-bottom: 4rem;
-    }
-    .guide-header h1 {
-        font-size: 2.5rem;
-        font-weight: 800;
-        color: var(--text-dark);
-        margin-bottom: 0.5rem;
-    }
-    .guide-header p {
-        font-size: 1.2rem;
-        color: var(--text-light);
-    }
+    .guide-header { text-align: center; margin-bottom: 2rem; }
+    .guide-header h1 { font-size: 2.5rem; font-weight: 800; color: var(--text-dark); margin-bottom: 0.5rem; }
+    .guide-header p { font-size: 1.2rem; color: var(--text-light); }
 
-    .cycle-section {
-        margin-bottom: 5rem;
-    }
-    .cycle-title {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: var(--text-dark);
-        border-bottom: 2px solid var(--border-color);
-        padding-bottom: 0.5rem;
-        margin-bottom: 2rem;
-    }
-
-    .category-group {
-        margin-bottom: 3rem;
-    }
-    .category-title {
-        font-size: 1.3rem;
+    /* ESTILOS PARA FILTROS */
+    .cycle-filters { display: flex; justify-content: center; gap: 1rem; margin-bottom: 3rem; flex-wrap: wrap; }
+    .filter-btn {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        padding: 0.5rem 1.5rem;
+        border-radius: 50px;
         font-weight: 600;
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
+        color: var(--text-light);
+        cursor: pointer;
+        transition: all 0.3s ease;
     }
-    /* Colores consistentes */
+    .filter-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
+    .filter-btn.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+    .cycle-section { margin-bottom: 5rem; }
+    .cycle-title {
+        font-size: 1.8rem; font-weight: 700; color: var(--text-dark);
+        border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 2rem;
+    }
+
+    .category-group { margin-bottom: 3rem; }
+    .category-title { font-size: 1.3rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    
     .lecto { color: #2563eb; }
     .logic { color: #16a34a; }
     .social { color: #ca8a04; }
     .sensory { color: #dc2626; }
 
-    .cards-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 1.5rem;
-    }
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
 
     .idea-card {
         background: var(--bg-card);
@@ -816,60 +825,25 @@
         padding: 1.5rem;
         box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         border: 1px solid var(--border-color);
-        border-left-width: 5px; 
+        border-left-width: 5px;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    .idea-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-    }
+    .idea-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
     
     .lecto-border { border-left-color: #2563eb; }
     .logic-border { border-left-color: #16a34a; }
     .social-border { border-left-color: #ca8a04; }
     .sensory-border { border-left-color: #dc2626; }
 
-    .idea-card h4 {
-        font-size: 1.1rem;
-        font-weight: 700;
-        margin: 0 0 0.5rem 0;
-        color: var(--text-dark);
-    }
-    .objective {
-        font-size: 0.9rem;
-        color: var(--text-light);
-        margin-bottom: 0.75rem;
-        line-height: 1.4;
-    }
-    .desc {
-        margin-bottom: 1.2rem;
-        line-height: 1.5;
-        font-size: 0.95rem;
-        color: var(--text-dark);
-    }
+    .idea-card h4 { font-size: 1.1rem; font-weight: 700; margin: 0 0 0.5rem 0; color: var(--text-dark); }
+    .objective { font-size: 0.9rem; color: var(--text-light); margin-bottom: 0.75rem; line-height: 1.4; }
+    .desc { margin-bottom: 1.2rem; line-height: 1.5; font-size: 0.95rem; color: var(--text-dark); }
 
-    details {
-        background: var(--bg-section);
-        padding: 0.75rem;
-        border-radius: 8px;
-        cursor: pointer;
-    }
-    summary {
-        font-weight: 600;
-        font-size: 0.9rem;
-        color: var(--primary-color);
-        outline: none;
-    }
-    ul {
-        margin-top: 0.75rem;
-        padding-left: 1.2rem;
-        font-size: 0.9rem;
-        list-style-type: disc;
-        color: var(--text-dark);
-    }
+    details { background: var(--bg-section); padding: 0.75rem; border-radius: 8px; cursor: pointer; }
+    summary { font-weight: 600; font-size: 0.9rem; color: var(--primary-color); outline: none; }
+    ul { margin-top: 0.75rem; padding-left: 1.2rem; font-size: 0.9rem; list-style-type: disc; color: var(--text-dark); }
     li { margin-bottom: 0.4rem; }
     
-    /* Animación de entrada */
     @keyframes fadeInUp {
         from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }

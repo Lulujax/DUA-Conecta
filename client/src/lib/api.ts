@@ -1,7 +1,7 @@
 import { PUBLIC_API_URL } from '$env/static/public';
 
 type FetchOptions = RequestInit & {
-    token?: string; // Por si queremos forzar un token manual (raro ahora)
+    // ELIMINADO: token?: string; 
 };
 
 async function request(endpoint: string, options: FetchOptions = {}) {
@@ -17,6 +17,7 @@ async function request(endpoint: string, options: FetchOptions = {}) {
 
     const config: RequestInit = {
         ...options,
+        // ELIMINADO: Removido el intento de usar token si venía en options
         headers,
         credentials: 'include', // <--- LA CLAVE: Envía las cookies al backend
     };

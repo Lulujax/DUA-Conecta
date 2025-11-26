@@ -7,16 +7,13 @@
 	import { editorStore } from '../editor/editor.store.svelte';
 	import { apiService } from '../editor/apiService';
 	
-	// Componentes UI
 	import EditorSidebar from './editor/EditorSidebar.svelte'; 
 	import TextToolbar from './editor/TextToolbar.svelte'; 
 	import ShapeToolbar from './editor/ShapeToolbar.svelte';
 	import ImageToolbar from './editor/ImageToolbar.svelte';
 	import GeneralToolbar from './editor/GeneralToolbar.svelte';
-    // Loader
-    import Loader from '$lib/components/ui/Loader.svelte';
 
-	let { templateId, baseElements } = $props<{ templateId: string; baseElements: Array<any>; }>();
+    let { templateId, baseElements } = $props<{ templateId: string; baseElements: Array<any>; }>();
 
 	let initialActivityId: number | null = null;
 	let initialActivityName: string | null = 'Plantilla sin nombre';
@@ -34,12 +31,11 @@
 	let canvasContainerRef: HTMLDivElement | null = $state(null);
 	let verticalSnapLine = $state<number | null>(null);
 	let horizontalSnapLine = $state<number | null>(null);
-	
-	// Zoom automático
 	let zoomScale = $state(1);
+
 	function handleResize() {
 		if (canvasContainerRef && window.innerWidth < 1000) {
-			const availableWidth = window.innerWidth - 40; 
+			const availableWidth = window.innerWidth - 40;
 			zoomScale = Math.min(1, availableWidth / 700);
 		} else {
 			zoomScale = 1;
@@ -53,7 +49,7 @@
 	
 	onMount(() => {
 		editorStore.init(baseElements, initialActivityId, initialActivityName);
-		if (initialActivityId && browser) apiService.loadActivity(initialActivityId, $user.token);
+		if (initialActivityId && browser) apiService.loadActivity(initialActivityId, $user?.token);
 		
 		handleResize();
 		window.addEventListener('resize', handleResize);
@@ -89,29 +85,17 @@
 	});
 	afterNavigate(() => { setTimeout(() => { blockNavigation = true; }, 0); });
 
-    // --- AQUÍ ESTABA EL PROBLEMA: FALTABAN LAS TECLAS ---
 	function handleKeyDown(event: KeyboardEvent) {
 		if ((event.target as HTMLElement)?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement)?.tagName)) return;
 		
-		if (event.ctrlKey || event.metaKey) {
+        if (event.ctrlKey || event.metaKey) {
 			const key = event.key.toLowerCase();
-			
-            // Deshacer / Rehacer
             if (key === 'z') { event.preventDefault(); editorStore.undo(); }
 			else if (key === 'y' || (event.shiftKey && key === 'z')) { event.preventDefault(); editorStore.redo(); }
-			
-            // --- AÑADIDO: COPIAR / PEGAR / DUPLICAR ---
 			else if (key === 'c') { event.preventDefault(); editorStore.copySelected(); }
 			else if (key === 'v') { event.preventDefault(); editorStore.paste(); }
 			else if (key === 'd') { event.preventDefault(); editorStore.duplicateSelectedElement(); }
-            // ------------------------------------------
-
-            // Estilos
-			else if (key === 'b') { event.preventDefault(); editorStore.toggleStyle('isBold'); }
-			else if (key === 'i') { event.preventDefault(); editorStore.toggleStyle('isItalic'); }
-			else if (key === 'u') { event.preventDefault(); editorStore.toggleStyle('isUnderlined'); }
-		
-        } else if (event.key === 'Delete' || event.key === 'Backspace') {
+		} else if (event.key === 'Delete' || event.key === 'Backspace') {
 			if (editorStore.selectedElementId !== null) { event.preventDefault(); editorStore.deleteSelected(); }
 		}
 	}
@@ -141,8 +125,11 @@
 						<Draggable
 							data-element-id={element.id}
 							{element}
-							isSelected={element.id === editorStore.selectedElementId}
-							onSelect={(id, e) => editorStore.selectElement(id)}
+							isSelected={editorStore.selectedIds.includes(element.id)}
+							onSelect={(id, e) => {
+                                const isMulti = (e instanceof MouseEvent || e instanceof KeyboardEvent) && (e.ctrlKey || e.metaKey || e.shiftKey);
+                                editorStore.selectElement(id, isMulti);
+                            }}
 							onUpdate={editorStore.updateElement}
 							allElements={editorStore.elements}
 							onShowSnapLine={handleShowSnapLine}
@@ -165,7 +152,6 @@
     .snap-line { position: absolute; background-color: #F472B6; z-index: 10000; pointer-events: none; }
     .snap-line.vertical { width: 2px; height: 100%; top: 0; }
     .snap-line.horizontal { height: 2px; width: 100%; left: 0; }
-
 	@media (max-width: 768px) {
 		.editor-layout { flex-direction: column-reverse; }
 		.editor-canvas-area { padding: 1rem; padding-top: 60px; }

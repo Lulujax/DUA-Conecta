@@ -2,13 +2,18 @@
     import { user } from '$lib/stores/auth';
     // --- IMPORTACIÓN CORREGIDA ---
     import { PUBLIC_API_URL } from '$env/static/public';
-
-    let currentUser = { name: '', email: '', token: '' };
+    // CAMBIO P1: Importar la utilidad de API que usa la cookie
+    import { api } from '$lib/api'; 
+    
+    // CAMBIO P1: Eliminado 'token' de la definición, solo propiedades del perfil
+    let currentUser = { name: '', email: '', id: 0 }; 
+    
     user.subscribe(value => {
         if (value) {
-            currentUser = value;
+            currentUser = value as any;
         }
     });
+    
     let isLoading = false;
     // --- Estas variables controlan el mensaje que ve el usuario ---
     let formMessage = '';
@@ -29,8 +34,8 @@
         isLoading = true;
         formMessage = ''; // Limpiamos el mensaje anterior
 
-        // --- AÑADIDO: Validación básica de token ---
-        if (!currentUser || !currentUser.token) {
+        // CAMBIO P1: Eliminada la validación de token no es necesaria
+        if (!currentUser) {
             messageType = 'error';
             formMessage = "No estás autenticado.";
             isLoading = false;
@@ -38,25 +43,8 @@
         }
 
         try {
-            // --- FETCH CORREGIDO ---
-            const response = await fetch(`${PUBLIC_API_URL}/api/user/change-password`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${currentUser.token}`
-                },
-                body: JSON.stringify(formData)
-            });
-            
-            // --- MANEJO DE ERRORES MEJORADO ---
-            if (!response.headers.get('content-type')?.includes('application/json')) {
-                 throw new Error(`Respuesta inesperada del servidor. Código: ${response.status}`);
-            }
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Ocurrió un error.');
-            }
+            // --- FETCH CORREGIDO: Usamos api.post al nuevo endpoint protegido ---
+            const result = await api.post('/api/user/change-password', formData); 
 
             // <-- ASÍ FUNCIONA (1/3): Si la respuesta es exitosa, preparamos el mensaje.
             messageType = 'success';
@@ -68,13 +56,11 @@
         } catch (error) {
             // Si hay un error, también lo mostramos
             messageType = 'error';
-             if (error instanceof SyntaxError) {
-                 formMessage = "Error: Respuesta inesperada del servidor.";
-             } else if (error instanceof Error) {
+            if (error instanceof Error) {
                  formMessage = error.message;
-             } else {
+            } else {
                  formMessage = "Un error desconocido ocurrió."
-             }
+            }
         } finally {
             isLoading = false;
         }
@@ -96,7 +82,8 @@
         <div class="info-group">
             <label>Nombre Completo</label>
             <p>{currentUser.name}</p>
-         </div>
+   
+        </div>
         <div class="info-group">
             <label>Correo Electrónico</label>
             <p>{currentUser.email}</p>
@@ -107,31 +94,38 @@
         <h3>Cambiar Contraseña</h3>
         <form on:submit|preventDefault={handleChangePassword}>
             <div class="form-group">
-                 <label for="current-password">Contraseña Actual</label>
+            
+                <label for="current-password">Contraseña Actual</label>
                 <div class="password-group">
                     <input type={oldPasswordFieldType} id="current-password" required placeholder="••••••••" bind:value={formData.currentPassword} />
                     <button type="button" class="password-toggle" on:click={toggleOldPassword}>
-                        {#if oldPasswordFieldType === 'password'}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>{:else}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>{/if}
+                        {#if oldPasswordFieldType === 
+                            'password'}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>{:else}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>{/if}
                     </button>
-                 </div>
+     
+                </div>
             </div>
             <div class="form-group">
                 <label for="new-password">Nueva Contraseña</label>
                 <div class="password-group">
-                    <input type={newPasswordFieldType} id="new-password" required placeholder="Mínimo 8 caracteres" bind:value={formData.newPassword} />
+                    <input type={newPasswordFieldType} id="new-password" required placeholder="Mínimo 8 caracteres" bind:value={formData.newPassword} 
+                    />
                      <button type="button" class="password-toggle" on:click={toggleNewPassword}>
-                         {#if newPasswordFieldType === 'password'}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>{:else}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>{/if}
+                         {#if newPasswordFieldType === 'password'}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>{:else}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 
+                                0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>{/if}
                     </button>
                 </div>
             </div>
             
-            {#if formMessage}
+            {#if 
+                formMessage}
                  <p class="form-message {messageType}">{formMessage}</p>
             {/if}
 
             <button type="submit" class="btn-primary" disabled={isLoading}>
                 {#if isLoading}
                     <div class="spinner"></div>
+                
                 {:else}
                      Actualizar Contraseña
                 {/if}
@@ -142,9 +136,9 @@
 
 <style>
     main { max-width: 1200px;
-margin: 0 auto; padding: 4rem 1.5rem; }
+        margin: 0 auto; padding: 4rem 1.5rem; }
     /* <-- ASÍ FUNCIONA (3/3): Estos estilos le dan el color verde al mensaje de éxito.
- */
+    */
     .form-message {
         padding: 0.75rem 1rem;
         border-radius: 8px;
