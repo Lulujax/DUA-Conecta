@@ -2,8 +2,7 @@ import { Elysia, t } from 'elysia'
 import { cors } from '@elysiajs/cors'
 import { jwt } from '@elysiajs/jwt'
 import postgres from 'postgres'
-import { z } from 'zod'
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 import { randomBytes } from 'crypto'
 
 // --- 1. CARGAR VARIABLES DE ENTORNO ---
@@ -23,27 +22,52 @@ if (await envFile.exists()) {
 }
 
 // Validaciones críticas
-if (!process.env.JWT_SECRET || !process.env.DATABASE_URL) {
-    console.error("❌ ERROR: Faltan variables en .env");
+if (!process.env.JWT_SECRET || !process.env.DATABASE_URL || !process.env.SMTP_EMAIL || !process.env.SMTP_PASSWORD) {
+    console.error("❌ ERROR: Faltan variables en .env (Revisa SMTP_EMAIL y SMTP_PASSWORD)");
     process.exit(1);
 }
 
-// --- 2. DETECCIÓN DE ENTORNO ---
+// --- 2. CONFIGURACIÓN ---
 const isRemoteDB = !process.env.DATABASE_URL.includes('localhost') && !process.env.DATABASE_URL.includes('127.0.0.1');
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 
 console.log(`🔌 DB Remota: ${isRemoteDB ? 'SÍ' : 'NO'}`);
-console.log(`🌍 Entorno Producción: ${isProduction ? 'SÍ' : 'NO'}`);
+console.log(`📧 Sistema de Correo: Gmail SMTP (${process.env.SMTP_EMAIL})`);
 
 // Conexión DB
 const sql = postgres(process.env.DATABASE_URL, { 
     ssl: isRemoteDB ? { rejectUnauthorized: false } : false 
 });
 
+// Configuración del Transporte de Correo (Gmail)
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASSWORD
+    }
+});
+
+// Helper para enviar correos
+async function sendEmail(to: string, subject: string, html: string) {
+    try {
+        await transporter.sendMail({
+            from: `"Soporte DUA-Conecta" <${process.env.SMTP_EMAIL}>`,
+            to,
+            subject,
+            html
+        });
+        console.log(`✅ Correo enviado a ${to}`);
+        return true;
+    } catch (error) {
+        console.error("❌ Error enviando correo:", error);
+        return false;
+    }
+}
+
 // --- 3. APP ---
 const app = new Elysia()
    .use(cors({
-        // CORRECCIÓN CORS: AÑADIDO 127.0.0.1 para compatibilidad local
         origin: [
             'http://localhost:5173',               
             'http://127.0.0.1:5173',
@@ -60,9 +84,7 @@ const app = new Elysia()
     }))
     .derive(async ({ jwt, cookie }) => {
         let token = cookie.auth_token?.value;
-        
         if (!token) return { profile: null };
-        
         try {
             const profile = await jwt.verify(token);
             return { profile };
@@ -102,7 +124,6 @@ const app = new Elysia()
             
             const token = await jwt.sign({ userId: user.id, name: user.name });
             
-            // Cookie segura
             cookie.auth_token.set({
                 value: token,
                 httpOnly: true,
@@ -120,10 +141,95 @@ const app = new Elysia()
                 const hashed = await Bun.password.hash(password);
                 await sql`INSERT INTO users (name, email, password_hash) VALUES (${name}, ${email}, ${hashed})`;
                 return { success: true };
-            } catch { set.status = 400; return { error: 'Error al registrar' }; }
+            } catch { set.status = 400; return { error: 'Error al registrar. ¿El correo ya existe?' }; }
         })
         .get('/me', ({ profile }) => ({ user: profile ? { name: (profile as any).name, id: (profile as any).userId } : null }))
         .post('/logout', ({ cookie }) => { cookie.auth_token.remove(); return { success: true }; })
+        
+        // --- RECUPERACIÓN DE CONTRASEÑA (GMAIL) ---
+        .post('/forgot-password', async ({ body, set }) => {
+            const { email } = body as any;
+            const [user] = await sql`SELECT id, name FROM users WHERE email = ${email}`;
+            
+            // Respondemos éxito siempre por seguridad
+            if (!user) return { message: 'Si el correo existe, recibirás un enlace.' };
+
+            // Generar token
+            const token = randomBytes(32).toString('hex');
+            const expires = new Date(Date.now() + 3600000); // 1 hora
+
+            // Guardar en DB (Tabla password_resets)
+            try {
+                await sql`
+                    INSERT INTO password_resets (user_id, token, expires_at)
+                    VALUES (${user.id}, ${token}, ${expires})
+                    ON CONFLICT (user_id) DO UPDATE SET token = ${token}, expires_at = ${expires}
+                `;
+            } catch (err) {
+                // Si la tabla no existe, intentamos crearla al vuelo (auto-fix)
+                await sql`
+                    CREATE TABLE IF NOT EXISTS password_resets (
+                        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                        token TEXT NOT NULL,
+                        expires_at TIMESTAMP NOT NULL
+                    );
+                `;
+                // Reintentar inserción
+                await sql`
+                    INSERT INTO password_resets (user_id, token, expires_at)
+                    VALUES (${user.id}, ${token}, ${expires})
+                    ON CONFLICT (user_id) DO UPDATE SET token = ${token}, expires_at = ${expires}
+                `;
+            }
+
+            // Usamos FRONTEND_URL del .env (en local será localhost:5173)
+            const link = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+            
+            const html = `
+                <div style="font-family: sans-serif; color: #333;">
+                    <h2>Hola ${user.name},</h2>
+                    <p>Has solicitado restablecer tu contraseña en DUA-Conecta.</p>
+                    <p>Haz clic en el siguiente botón para continuar:</p>
+                    <a href="${link}" style="display: inline-block; background:#A084E8; color:white; padding:12px 24px; text-decoration:none; border-radius:50px; font-weight:bold;">Restablecer Contraseña</a>
+                    <p style="margin-top:20px; font-size: 0.9em; color: #666;">Este enlace expira en 1 hora.</p>
+                </div>
+            `;
+
+            const sent = await sendEmail(email, 'Recuperar Contraseña - DUA Conecta', html);
+            
+            if (!sent) {
+                set.status = 500;
+                return { error: "Error técnico enviando el correo." };
+            }
+
+            return { message: 'Si el correo existe, recibirás un enlace.' };
+        })
+
+        .post('/reset-password', async ({ body, set }) => {
+            const { token, newPassword } = body as any;
+
+            const [reset] = await sql`
+                SELECT user_id FROM password_resets 
+                WHERE token = ${token} AND expires_at > NOW()
+            `;
+
+            if (!reset) {
+                set.status = 400;
+                return { error: 'El enlace es inválido o ha expirado.' };
+            }
+
+            if (!newPassword || newPassword.length < 8) {
+                set.status = 400;
+                return { error: 'La contraseña debe tener 8 caracteres.' };
+            }
+
+            const hashed = await Bun.password.hash(newPassword);
+            
+            await sql`UPDATE users SET password_hash = ${hashed} WHERE id = ${reset.user_id}`;
+            await sql`DELETE FROM password_resets WHERE user_id = ${reset.user_id}`;
+
+            return { success: true, message: 'Contraseña actualizada. Inicia sesión.' };
+        })
     )
 
     // --- API PROTEGIDA ---
@@ -168,43 +274,28 @@ const app = new Elysia()
         .post('/user/change-password', async ({ profile, body, set }) => {
             const { currentPassword, newPassword } = body as any;
             const userId = (profile as any).userId;
-
             const [user] = await sql`SELECT id, password_hash FROM users WHERE id = ${userId}`;
             if (!user || !(await Bun.password.verify(currentPassword, user.password_hash))) {
-                set.status = 401; 
-                return { error: 'Contraseña actual incorrecta.' };
+                set.status = 401; return { error: 'Contraseña actual incorrecta.' };
             }
-
             if (!newPassword || newPassword.length < 8) {
-                set.status = 400; 
-                return { error: 'La nueva contraseña debe tener al menos 8 caracteres.' };
+                set.status = 400; return { error: 'Mínimo 8 caracteres.' };
             }
-            
             const hashed = await Bun.password.hash(newPassword);
             await sql`UPDATE users SET password_hash = ${hashed} WHERE id = ${userId}`;
-
-            return { success: true, message: 'Contraseña actualizada con éxito.' };
+            return { success: true, message: 'Contraseña actualizada.' };
         })
         .get('/pixabay', async ({ query, set }) => {
             const q = query.q as string;
             if (!q) { return { hits: [] }; }
-            
             const apiKey = process.env.PIXABAY_API_KEY;
-            if (!apiKey) { 
-                set.status = 500; 
-                return { error: "Falta configuración de Pixabay en el servidor." }; 
-            }
-
+            if (!apiKey) { set.status = 500; return { error: "Falta API Key." }; }
             try {
                 const url = `https://pixabay.com/api/?key=${apiKey}&q=${encodeURIComponent(q)}&lang=es&image_type=all&safesearch=true&per_page=20`;
-                
                 const response = await fetch(url);
-                const data = await response.json();
-                return data;
+                return await response.json();
             } catch (error) {
-                console.error("Error Pixabay:", error);
-                set.status = 500;
-                return { error: "Error al conectar con Pixabay" };
+                set.status = 500; return { error: "Error externo." };
             }
         })
     )

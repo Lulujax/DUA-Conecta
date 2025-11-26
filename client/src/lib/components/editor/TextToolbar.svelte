@@ -4,7 +4,8 @@
     import { onMount } from 'svelte';
 
 	const availableFonts = ['Arial', 'Verdana', 'Times New Roman', 'Courier New', 'Georgia', 'Comic Sans MS', 'Anton', 'Oswald'];
-    const lineHeights = [1.0, 1.2, 1.4, 1.6, 2.0];
+    // CAMBIO: Opciones de interlineado actualizadas
+    const lineHeights = [1.0, 1.15, 1.5, 2.0, 2.5, 3.0];
 	
     let isBold = $state(false);
     let isItalic = $state(false);
@@ -89,8 +90,7 @@
     
     <select class="toolbar-select short" title="Interlineado"
         onchange={(e) => editorStore.changeLineHeight(parseFloat(e.currentTarget.value))}
-        value={editorStore.selectedElement?.lineHeight || 1.4}>
-        {#each lineHeights as lh}
+        value={editorStore.selectedElement?.lineHeight || 1.5}> {#each lineHeights as lh}
             <option value={lh}>{lh}</option>
         {/each}
     </select>
