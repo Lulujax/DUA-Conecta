@@ -2,12 +2,13 @@
   import { onMount } from 'svelte';
   import heroImage from '$lib/images/hero-image.jpg';
 
+  // ANIMACIÓN SIMPLIFICADA (Opcional, solo si el navegador responde bien)
   onMount(() => {
-    const sections = document.querySelectorAll('.section');
+    const sections = document.querySelectorAll('.animate-on-scroll');
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
+          entry.target.classList.add('is-visible');
           observer.unobserve(entry.target);
         }
       });
@@ -37,7 +38,7 @@
   </header>
 
   <main>
-    <section class="hero">
+    <section class="hero animate-on-scroll">
       <div class="hero-content">
         <div class="hero-badge">✨ Para los héroes del salón de clases</div>
         <h1>Convierte la Educación en una Aventura</h1>
@@ -59,7 +60,7 @@
       </div>
     </section>
 
-    <section id="beneficios" class="section">
+    <section id="beneficios" class="section animate-on-scroll">
       <div class="section-header">
         <h2 class="section-title">Diseñado para ti, pensado para ellos</h2>
         <p class="section-subtitle">Hemos convertido los mayores desafíos en tus nuevas fortalezas.</p>
@@ -83,7 +84,7 @@
       </div>
     </section>
 
-    <section id="como-funciona" class="section alt-bg">
+    <section id="como-funciona" class="section alt-bg animate-on-scroll">
       <div class="section-header">
         <h2 class="section-title">Tu Próxima Actividad Increíble en 3 Pasos</h2>
       </div>
@@ -112,7 +113,7 @@
       </div>
     </section>
 
-    <section id="testimonios" class="section">
+    <section id="testimonios" class="section animate-on-scroll">
       <div class="section-header">
         <h2 class="section-title">Lo que dicen los Docentes</h2>
       </div>
@@ -128,7 +129,7 @@
       </div>
     </section>
 
-    <section class="section cta-section">
+    <section class="section cta-section animate-on-scroll">
         <div class="cta-content">
             <h2>Crea tus Actividades Ya Mismo</h2>
             <p>Únete a la comunidad de educadores que están transformando el aprendizaje.</p>
@@ -175,19 +176,21 @@
 </div>
 
 <style>
-/* ======================== */
-/* ESTILOS ESPECÍFICOS DEL HOME */
-/* ======================== */
+/* LAYOUT GENERAL */
 .page-wrapper, main { width: 100%; }
 main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
-.header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; max-width: 1100px; margin: 0 auto; position: sticky; top: 0; z-index: 1000; animation: fadeInUp 0.5s ease-out; }
-.header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--header-bg); backdrop-filter: blur(10px); z-index: -1; border-bottom: 1px solid var(--border-color); transition: background-color 0.3s ease, border-color 0.3s ease; }
+
+/* HEADER */
+.header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; max-width: 1100px; margin: 0 auto; position: sticky; top: 0; z-index: 1000; }
+.header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--header-bg); backdrop-filter: blur(10px); z-index: -1; border-bottom: 1px solid var(--border-color); }
 .logo { display: flex; align-items: center; font-weight: 600; font-size: 1.25rem; }
 .logo svg { color: var(--primary-color); margin-right: 0.5rem; }
 .navigation { display: none; }
 .auth-buttons { display: flex; gap: 0.75rem; }
+
+/* HERO */
 .hero { padding: 4rem 1.5rem 6rem 1.5rem; }
-.hero-content { animation: fadeInUp 0.8s ease-out; margin: 0 auto 3rem auto; text-align: center; }
+.hero-content { margin: 0 auto 3rem auto; text-align: center; }
 .hero-badge { display: inline-block; background-color: var(--bg-section); color: var(--primary-color); padding: 0.5rem 1rem; border-radius: 20px; font-weight: 700; font-size: 0.9rem; margin-bottom: 1.5rem; }
 .hero-content h1 { font-size: 2.8rem; font-weight: 800; margin: 0 0 1.5rem 0; line-height: 1.2; background: linear-gradient(45deg, var(--text-dark), var(--primary-color)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 .hero-content p { font-size: 1.1rem; color: var(--text-light); max-width: 600px; margin: 0 auto 2.5rem auto; line-height: 1.7; }
@@ -196,11 +199,15 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
 .hero-image-container { position: relative; display: flex; justify-content: center; align-items: center; animation: float 6s ease-in-out infinite; }
 .blob-background { position: absolute; width: 100%; height: 100%; max-width: 500px; background: linear-gradient(45deg, var(--accent-1-light), var(--bg-section)); z-index: -1; animation: blob-morph 10s ease-in-out infinite; }
 .hero-image { width: 100%; max-width: 450px; border-radius: 24px; padding: 8px; background: var(--bg-card); box-shadow: 0 25px 50px -12px rgba(160, 132, 232, 0.15); }
+
+/* SECCIONES */
 .section { padding: 6rem 0; }
 .section-header { text-align: center; max-width: 700px; margin: 0 auto 4rem auto; }
 .section-title { font-size: 2.5rem; font-weight: 700; color: var(--text-dark); margin: 0.5rem 0; }
 .section-subtitle { font-size: 1.1rem; color: var(--text-light); line-height: 1.7; }
 .alt-bg { background-color: var(--bg-section); border-radius: 30px; margin: 0 -1.5rem; padding: 6rem 1.5rem; }
+
+/* BENEFICIOS */
 .features-grid { display: grid; grid-template-columns: 1fr; gap: 2rem; }
 .feature-card { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; padding: 2.5rem 2rem; text-align: center; transition: all 0.3s ease; }
 .feature-card:hover { transform: translateY(-10px); box-shadow: 0 15px 30px rgba(160, 132, 232, 0.1); border-color: var(--primary-color); }
@@ -208,20 +215,28 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
 .feature-card:hover .feature-icon { transform: rotate(10deg) scale(1.1); }
 .feature-card h3 { color: var(--text-dark); margin: 0 0 0.5rem 0; font-size: 1.25rem; font-weight: 600; }
 .feature-card p { color: var(--text-light); line-height: 1.6; }
+
+/* PASOS */
 .steps-container { display: flex; flex-direction: column; align-items: center; gap: 2rem; }
 .step-card { text-align: center; max-width: 280px; }
 .step-number { width: 50px; height: 50px; background: linear-gradient(45deg, var(--primary-color), var(--primary-hover)); color: var(--text-on-primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 700; margin: 0 auto 1.5rem auto; box-shadow: 0 5px 15px rgba(160, 132, 232, 0.4); }
 .step-card h3 { font-size: 1.25rem; font-weight: 600; color: var(--text-dark); }
 .step-card p { color: var(--text-light); }
 .step-arrow { color: var(--border-color); transform: rotate(90deg); margin: 1rem 0; }
+
+/* TESTIMONIOS */
 .testimonial-card { background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); border-radius: 24px; padding: 2rem; max-width: 700px; margin: 0 auto; text-align: center; color: var(--text-on-primary); box-shadow: 0 20px 40px rgba(160, 132, 232, 0.3); }
 .testimonial-card img { width: 80px; height: 80px; border-radius: 50%; margin-bottom: 1.5rem; border: 4px solid var(--bg-card); }
 .testimonial-card blockquote { font-size: 1.1rem; font-weight: 500; line-height: 1.6; margin: 0 0 1.5rem 0; border: none; }
 .testimonial-card cite { font-style: normal; opacity: 0.8; }
 .testimonial-card cite strong { display: block; opacity: 1; font-weight: 600; }
+
+/* CTA */
 .cta-section { background: var(--bg-section); color: var(--text-dark); padding: 6rem 1.5rem; text-align: center; }
 .cta-content h2 { font-size: 2.5rem; font-weight: 800; margin: 0 0 1rem 0; }
 .cta-content p { font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 0 auto 2rem auto; color: var(--text-light); }
+
+/* FOOTER */
 .main-footer { background-color: var(--text-dark); color: var(--text-light); padding: 4rem 1.5rem 2rem 1.5rem; }
 .footer-grid { display: grid; grid-template-columns: 1fr; gap: 2.5rem; max-width: 1100px; margin: 0 auto; }
 .footer-column h3, .footer-column h4 { color: var(--bg-card); margin-bottom: 1rem; }
@@ -232,6 +247,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
 .footer-column ul a:hover { color: var(--primary-color); }
 .footer-bottom { border-top: 1px solid var(--border-color); margin-top: 3rem; padding-top: 2rem; text-align: center; color: var(--text-light); font-size: 0.9rem; }
 
+/* MEDIA QUERIES */
 @media (min-width: 576px) { .footer-grid { grid-template-columns: 2fr 1fr; } }
 @media (min-width: 768px) {
     .navigation { display: flex; gap: 1.5rem; }
@@ -258,10 +274,16 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
   .footer-grid { grid-template-columns: 1fr; }
 }
 
-/* ANIMACIONES Y UTILIDADES */
-@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+/* ANIMACIONES Y UTILIDADES (CORREGIDO: Visibilidad por defecto) */
+.animate-on-scroll {
+    opacity: 1; /* Cambio crítico: Visible por defecto para evitar pantalla en blanco */
+    transform: translateY(0);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+/* Solo si el navegador soporta y JS cargó, usamos la clase para "aparecer" */
+/* Pero para seguridad máxima en este fix, desactivamos la ocultación inicial */
+
 @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-15px); } }
 @keyframes blob-morph { 0%, 100% { border-radius: 65% 35% 55% 45% / 48% 45% 55% 52%; } 50% { border-radius: 35% 65% 45% 55% / 58% 55% 45% 42%; } }
-.section { opacity: 0; transform: translateY(30px); transition: opacity 0.6s ease-out, transform 0.6s ease-out; }
-.section.visible { opacity: 1; transform: translateY(0); }
 </style>

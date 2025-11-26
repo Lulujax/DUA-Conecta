@@ -21,47 +21,50 @@ if (await envFile.exists()) {
     }
 }
 
-// Validaciones críticas
-if (!process.env.JWT_SECRET || !process.env.DATABASE_URL || !process.env.SMTP_EMAIL || !process.env.SMTP_PASSWORD) {
-    console.error("❌ ERROR: Faltan variables en .env (Revisa SMTP_EMAIL y SMTP_PASSWORD)");
-    process.exit(1);
+// --- 2. DETECCIÓN DE ENTORNO (RECUPERADO) ---
+// Si existe la variable RENDER o NODE_ENV es production, estamos en la nube.
+const isProduction = !!process.env.RENDER || process.env.NODE_ENV === 'production';
+const isRemoteDB = !process.env.DATABASE_URL?.includes('localhost') && !process.env.DATABASE_URL?.includes('127.0.0.1');
+
+console.log("==========================================");
+console.log(`🌍 MODO PRODUCCIÓN (Nube): ${isProduction ? 'SÍ ✅' : 'NO ❌ (Local)'}`);
+console.log(`🔌 BASE DE DATOS REMOTA:   ${isRemoteDB ? 'SÍ ✅' : 'NO ❌'}`);
+console.log(`🍪 CONFIGURACIÓN COOKIE:   Secure=${isProduction}, SameSite=${isProduction ? 'None' : 'Lax'}`);
+console.log("==========================================");
+
+if (!process.env.JWT_SECRET || !process.env.DATABASE_URL) {
+    console.error("❌ ERROR CRÍTICO: Faltan variables fundamentales.");
 }
 
-// --- 2. CONFIGURACIÓN ---
-const isRemoteDB = !process.env.DATABASE_URL.includes('localhost') && !process.env.DATABASE_URL.includes('127.0.0.1');
-const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
-
-console.log(`🔌 DB Remota: ${isRemoteDB ? 'SÍ' : 'NO'}`);
-console.log(`📧 Sistema de Correo: Gmail SMTP (${process.env.SMTP_EMAIL})`);
-
 // Conexión DB
-const sql = postgres(process.env.DATABASE_URL, { 
+const sql = postgres(process.env.DATABASE_URL!, { 
     ssl: isRemoteDB ? { rejectUnauthorized: false } : false 
 });
 
-// Configuración del Transporte de Correo (Gmail)
+// Configuración Gmail (Puerto 587 - STARTTLS)
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
     auth: {
         user: process.env.SMTP_EMAIL,
         pass: process.env.SMTP_PASSWORD
-    }
+    },
+    tls: { rejectUnauthorized: false }
 });
 
-// Helper para enviar correos
+// Helper de correo
 async function sendEmail(to: string, subject: string, html: string) {
     try {
         await transporter.sendMail({
             from: `"Soporte DUA-Conecta" <${process.env.SMTP_EMAIL}>`,
-            to,
-            subject,
-            html
+            to, subject, html
         });
         console.log(`✅ Correo enviado a ${to}`);
-        return true;
-    } catch (error) {
-        console.error("❌ Error enviando correo:", error);
-        return false;
+        return { success: true };
+    } catch (error: any) {
+        console.error("❌ Error Nodemailer:", error);
+        return { success: false, error: error.message || 'Error SMTP' };
     }
 }
 
@@ -71,20 +74,23 @@ const app = new Elysia()
         origin: [
             'http://localhost:5173',               
             'http://127.0.0.1:5173',
-            'https://dua-conecta.vercel.app',      
-            'https://dua-conecta-j1pn.vercel.app'
+            'https://dua-conecta.vercel.app',
+            'https://dua-conecta-j1pn.vercel.app' // Por si acaso Vercel te da este subdominio
         ], 
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
-        credentials: true,
+        credentials: true, // OBLIGATORIO para cookies
     }))
     .use(jwt({
         name: 'jwt',
         secret: process.env.JWT_SECRET!
     }))
     .derive(async ({ jwt, cookie }) => {
+        // Intentamos leer la cookie. Si no existe, el usuario no está logueado.
         let token = cookie.auth_token?.value;
+        
         if (!token) return { profile: null };
+        
         try {
             const profile = await jwt.verify(token);
             return { profile };
@@ -93,7 +99,6 @@ const app = new Elysia()
         }
     })
 
-    // --- RUTAS PÚBLICAS ---
     .get('/', () => 'Backend Online 🚀')
     
     .get('/templates', async () => {
@@ -101,7 +106,6 @@ const app = new Elysia()
             const templates = await sql`SELECT id, name, category, thumbnail_url, description FROM templates ORDER BY id ASC`;
             return { templates };
         } catch (e) {
-            console.error("Error DB templates:", e);
             return { error: "Error cargando plantillas" };
         }
     })
@@ -112,7 +116,6 @@ const app = new Elysia()
         return { template: t };
     })
 
-    // --- AUTH ---
     .group('/auth', app => app
         .post('/login', async ({ body, jwt, cookie, set }) => {
             const { email, password } = body as any;
@@ -124,12 +127,20 @@ const app = new Elysia()
             
             const token = await jwt.sign({ userId: user.id, name: user.name });
             
+            // --- CONFIGURACIÓN DE LA COOKIE (CLAVE DEL BUG) ---
             cookie.auth_token.set({
                 value: token,
-                httpOnly: true,
+                httpOnly: true, // Nadie puede leerla desde JS (Seguridad XSS)
+                
+                // SI es producción (Render) -> true (HTTPS obligatorio)
+                // SI es local -> false (HTTP normal)
                 secure: isProduction, 
+                
+                // SI es producción -> 'none' (Para que viaje de Vercel a Render)
+                // SI es local -> 'lax' (Para que no moleste en localhost)
                 sameSite: isProduction ? 'none' : 'lax', 
-                maxAge: 7 * 86400,
+                
+                maxAge: 7 * 86400, // 7 días de duración
                 path: '/'
             });
 
@@ -141,111 +152,65 @@ const app = new Elysia()
                 const hashed = await Bun.password.hash(password);
                 await sql`INSERT INTO users (name, email, password_hash) VALUES (${name}, ${email}, ${hashed})`;
                 return { success: true };
-            } catch { set.status = 400; return { error: 'Error al registrar. ¿El correo ya existe?' }; }
+            } catch { set.status = 400; return { error: 'Error al registrar.' }; }
         })
         .get('/me', ({ profile }) => ({ user: profile ? { name: (profile as any).name, id: (profile as any).userId } : null }))
-        .post('/logout', ({ cookie }) => { cookie.auth_token.remove(); return { success: true }; })
+        .post('/logout', ({ cookie }) => { 
+            cookie.auth_token.remove(); 
+            return { success: true }; 
+        })
         
-        // --- RECUPERACIÓN DE CONTRASEÑA (GMAIL) ---
         .post('/forgot-password', async ({ body, set }) => {
             const { email } = body as any;
+            if (!process.env.SMTP_EMAIL || !process.env.SMTP_PASSWORD) {
+                set.status = 500; return { error: "Error config correo." };
+            }
             const [user] = await sql`SELECT id, name FROM users WHERE email = ${email}`;
-            
-            // Respondemos éxito siempre por seguridad
-            if (!user) return { message: 'Si el correo existe, recibirás un enlace.' };
+            if (!user) return { message: 'Si existe, enviamos el correo.' };
 
-            // Generar token
             const token = randomBytes(32).toString('hex');
-            const expires = new Date(Date.now() + 3600000); // 1 hora
+            const expires = new Date(Date.now() + 3600000); 
 
-            // Guardar en DB (Tabla password_resets)
             try {
-                await sql`
-                    INSERT INTO password_resets (user_id, token, expires_at)
-                    VALUES (${user.id}, ${token}, ${expires})
-                    ON CONFLICT (user_id) DO UPDATE SET token = ${token}, expires_at = ${expires}
-                `;
+                await sql`INSERT INTO password_resets (user_id, token, expires_at) VALUES (${user.id}, ${token}, ${expires}) ON CONFLICT (user_id) DO UPDATE SET token = ${token}, expires_at = ${expires}`;
             } catch (err) {
-                // Si la tabla no existe, intentamos crearla al vuelo (auto-fix)
-                await sql`
-                    CREATE TABLE IF NOT EXISTS password_resets (
-                        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                        token TEXT NOT NULL,
-                        expires_at TIMESTAMP NOT NULL
-                    );
-                `;
-                // Reintentar inserción
-                await sql`
-                    INSERT INTO password_resets (user_id, token, expires_at)
-                    VALUES (${user.id}, ${token}, ${expires})
-                    ON CONFLICT (user_id) DO UPDATE SET token = ${token}, expires_at = ${expires}
-                `;
+                // Fallback si la tabla no existe
+                await sql`CREATE TABLE IF NOT EXISTS password_resets (user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, token TEXT NOT NULL, expires_at TIMESTAMP NOT NULL)`;
+                await sql`INSERT INTO password_resets (user_id, token, expires_at) VALUES (${user.id}, ${token}, ${expires}) ON CONFLICT (user_id) DO UPDATE SET token = ${token}, expires_at = ${expires}`;
             }
 
-            // Usamos FRONTEND_URL del .env (en local será localhost:5173)
-            const link = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
-            
+            const link = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
             const html = `
-                <div style="font-family: sans-serif; color: #333;">
+                <div style="font-family:sans-serif;color:#333;">
                     <h2>Hola ${user.name},</h2>
-                    <p>Has solicitado restablecer tu contraseña en DUA-Conecta.</p>
-                    <p>Haz clic en el siguiente botón para continuar:</p>
-                    <a href="${link}" style="display: inline-block; background:#A084E8; color:white; padding:12px 24px; text-decoration:none; border-radius:50px; font-weight:bold;">Restablecer Contraseña</a>
-                    <p style="margin-top:20px; font-size: 0.9em; color: #666;">Este enlace expira en 1 hora.</p>
-                </div>
-            `;
+                    <p>Recupera tu contraseña aquí:</p>
+                    <a href="${link}" style="background:#A084E8;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Cambiar Contraseña</a>
+                </div>`;
 
-            const sent = await sendEmail(email, 'Recuperar Contraseña - DUA Conecta', html);
-            
-            if (!sent) {
-                set.status = 500;
-                return { error: "Error técnico enviando el correo." };
-            }
-
-            return { message: 'Si el correo existe, recibirás un enlace.' };
+            const result = await sendEmail(email, 'Recuperar Contraseña', html);
+            if (!result.success) { set.status = 500; return { error: `Error correo: ${result.error}` }; }
+            return { message: 'Si existe, enviamos el correo.' };
         })
 
         .post('/reset-password', async ({ body, set }) => {
             const { token, newPassword } = body as any;
-
-            const [reset] = await sql`
-                SELECT user_id FROM password_resets 
-                WHERE token = ${token} AND expires_at > NOW()
-            `;
-
-            if (!reset) {
-                set.status = 400;
-                return { error: 'El enlace es inválido o ha expirado.' };
-            }
-
-            if (!newPassword || newPassword.length < 8) {
-                set.status = 400;
-                return { error: 'La contraseña debe tener 8 caracteres.' };
-            }
-
-            const hashed = await Bun.password.hash(newPassword);
+            const [reset] = await sql`SELECT user_id FROM password_resets WHERE token = ${token} AND expires_at > NOW()`;
+            if (!reset) { set.status = 400; return { error: 'Token inválido/expirado.' }; }
+            if (!newPassword || newPassword.length < 8) { set.status = 400; return { error: 'Mínimo 8 caracteres.' }; }
             
+            const hashed = await Bun.password.hash(newPassword);
             await sql`UPDATE users SET password_hash = ${hashed} WHERE id = ${reset.user_id}`;
             await sql`DELETE FROM password_resets WHERE user_id = ${reset.user_id}`;
-
-            return { success: true, message: 'Contraseña actualizada. Inicia sesión.' };
+            return { success: true, message: 'Contraseña actualizada.' };
         })
     )
-
-    // --- API PROTEGIDA ---
     .group('/api', app => app
         .onBeforeHandle(({ profile, set }) => {
             if (!profile) { set.status = 401; return { error: 'No autorizado' }; }
         })
         .get('/activities', async ({ profile }) => {
             const userId = (profile as any).userId;
-            const activities = await sql`
-                SELECT a.id, a.name, a.template_id, a.updated_at, a.preview_img, t.thumbnail_url, t.category
-                FROM saved_activities a
-                LEFT JOIN templates t ON a.template_id::int = t.id
-                WHERE a.user_id = ${userId}
-                ORDER BY a.updated_at DESC
-            `;
+            const activities = await sql`SELECT a.id, a.name, a.template_id, a.updated_at, a.preview_img, t.thumbnail_url, t.category FROM saved_activities a LEFT JOIN templates t ON a.template_id::int = t.id WHERE a.user_id = ${userId} ORDER BY a.updated_at DESC`;
             return { activities };
         })
         .get('/activities/:id', async ({ profile, params, set }) => {
