@@ -71,15 +71,10 @@ async function sendEmail(to: string, subject: string, html: string) {
 // --- 3. APP ---
 const app = new Elysia()
    .use(cors({
-        origin: [
-            'http://localhost:5173',               
-            'http://127.0.0.1:5173',
-            'https://dua-conecta.vercel.app',
-            'https://dua-conecta-j1pn.vercel.app' // Por si acaso Vercel te da este subdominio
-        ], 
+        origin: true, // <--- ESTO ES LA CLAVE: Permite que cualquiera (Vercel) entre.
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
-        credentials: true, // OBLIGATORIO para cookies
+        credentials: true,
     }))
     .use(jwt({
         name: 'jwt',
