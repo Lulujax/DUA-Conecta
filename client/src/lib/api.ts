@@ -1,47 +1,55 @@
 import { PUBLIC_API_URL } from '$env/static/public';
 
-type FetchOptions = RequestInit & {
-    // ELIMINADO: token?: string; 
-};
+const BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
-async function request(endpoint: string, options: FetchOptions = {}) {
-    const url = `${PUBLIC_API_URL}${endpoint}`;
-
-    const headers = new Headers(options.headers);
-    
-    // Configuración por defecto
-    headers.set('Content-Type', 'application/json');
-
-    // NOTA: Ya no enviamos 'Authorization: Bearer ...' automáticamente
-    // porque confiamos en la cookie. 
-
-    const config: RequestInit = {
-        ...options,
-        // ELIMINADO: Removido el intento de usar token si venía en options
-        headers,
-        credentials: 'include', // <--- LA CLAVE: Envía las cookies al backend
+// 1. La lógica central (el motor)
+const coreRequest = async (method: string, path: string, data?: any, token?: string) => {
+    const opts: RequestInit = {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+        }
     };
 
-    const response = await fetch(url, config);
-
-    // Manejo básico de errores
-    if (!response.ok) {
-        // Si es 401 (No autorizado), podríamos disparar un logout aquí
-        if (response.status === 401) {
-            // Opcional: window.location.href = '/login';
-        }
-        
-        // Intentamos leer el error del JSON
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `Error ${response.status}: ${response.statusText}`);
+    if (data) {
+        opts.body = JSON.stringify(data);
     }
 
-    return response.json();
-}
+    if (token) {
+        (opts.headers as any)['Authorization'] = `Bearer ${token}`;
+    }
 
-export const api = {
-    get: (endpoint: string) => request(endpoint, { method: 'GET' }),
-    post: (endpoint: string, body: any) => request(endpoint, { method: 'POST', body: JSON.stringify(body) }),
-    put: (endpoint: string, body: any) => request(endpoint, { method: 'PUT', body: JSON.stringify(body) }),
-    delete: (endpoint: string) => request(endpoint, { method: 'DELETE' }),
+    opts.credentials = 'include'; // Vital para cookies/sesión
+
+    try {
+        const res = await fetch(`${BASE_URL}${path}`, opts);
+        const responseData = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+            return { error: responseData.error || `Error ${res.status}: ${res.statusText}` };
+        }
+
+        return responseData;
+    } catch (e) {
+        console.error("Error de red:", e);
+        return { error: "Error de conexión con el servidor" };
+    }
 };
+
+// 2. LA MAGIA HÍBRIDA
+// Esto crea una variable 'api' que puede usarse de las dos formas:
+// Forma A: api('GET', '/ruta')
+// Forma B: api.post('/ruta', datos)
+
+export const api = Object.assign(
+    // Función principal (para compatibilidad con lo que te pasé antes)
+    (method: string, path: string, data?: any, token?: string) => coreRequest(method, path, data, token),
+    
+    // Métodos extra (para que funcione api.post, api.get, etc.)
+    {
+        get: (path: string, token?: string) => coreRequest('GET', path, undefined, token),
+        post: (path: string, data: any, token?: string) => coreRequest('POST', path, data, token),
+        put: (path: string, data: any, token?: string) => coreRequest('PUT', path, data, token),
+        delete: (path: string, token?: string) => coreRequest('DELETE', path, undefined, token),
+    }
+);

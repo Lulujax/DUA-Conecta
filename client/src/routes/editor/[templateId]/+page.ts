@@ -1,30 +1,33 @@
 import { error } from '@sveltejs/kit';
-import { PUBLIC_API_URL } from '$env/static/public';
+import { api } from '$lib/api'; 
 
-/** @type {import('./$types').PageLoad} */
-export async function load({ params, fetch, url }) {
-    const { templateId } = params;
-    
-    // Chequeamos si es una edición de actividad existente o una nueva desde plantilla
-    const activityId = url.searchParams.get('activityId');
+// Función de carga (Server Load)
+export const load = async ({ params }) => {
+    // CORRECCIÓN VITAL: Leemos 'templateId' porque así llamaste a la carpeta [templateId]
+    const id = params.templateId;
+
+    console.log("🔍 Intentando cargar plantilla con ID:", id);
+
+    if (!id) {
+        throw error(400, 'ID de plantilla requerido');
+    }
 
     try {
-        // 1. Pedimos la plantilla Base (Siempre necesaria)
-        const response = await fetch(`${PUBLIC_API_URL}/templates/${templateId}`);
-        if (!response.ok) throw error(404, 'Plantilla no encontrada');
-        const data = await response.json();
+        // Petición al Backend
+        const response = await api('GET', `/templates/${id}`);
         
-        // Devolvemos los datos listos
+        if (response.error) {
+            console.error("❌ El backend respondió con error:", response.error);
+            throw error(404, 'La plantilla no existe o no se pudo cargar');
+        }
+
+        // Si todo sale bien, retornamos los datos al componente Svelte
         return {
-            templateId,
-            baseElements: data.template.base_elements,
-            // Pasamos query params útiles
-            activityId: activityId ? parseInt(activityId) : null,
-            activityName: url.searchParams.get('name')
+            template: response.template
         };
 
     } catch (err) {
-        console.error("Error cargando editor:", err);
-        throw error(404, 'No se pudo cargar el editor');
+        console.error("💥 Error de conexión en load:", err);
+        throw error(500, 'Error conectando con el servidor para cargar la plantilla');
     }
-}
+};

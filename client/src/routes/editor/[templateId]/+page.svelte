@@ -2,54 +2,59 @@
     import { page } from '$app/stores';
     import { onMount } from 'svelte';
     import TemplateEditor from '$lib/components/TemplateEditor.svelte';
-    // Importamos el Loader que acabamos de asegurar
     import Loader from '$lib/components/ui/Loader.svelte';
-    // Importamos la API para hablar con el backend
     import { api } from '$lib/api';
 
-    // Obtenemos los IDs de la URL
-    const templateId = $page.params.templateId;
-    const activityIdParam = $page.url.searchParams.get('activityId');
+    // Estado local reactivo
+    let baseElements = $state(null);
+    let isLoading = $state(true);
+    let errorMsg = $state('');
+    
+    // Reactividad: Observamos el ID de la URL
+    let currentTemplateId = $derived($page.params.templateId);
+    let currentActivityId = $derived($page.url.searchParams.get('activityId'));
 
-    // Estado: Empezamos sin datos (null) y cargando (true)
-    let baseElements = null;
-    let isLoading = true;
-    let errorMsg = '';
+    async function loadEditorData(tId: string, aId: string | null) {
+        isLoading = true;
+        errorMsg = '';
+        baseElements = null; // Limpiar visualmente
+        
+        console.log("🔌 Iniciando carga para:", tId, "Actividad:", aId);
 
-    onMount(async () => {
-        console.log("🔌 Iniciando editor para plantilla:", templateId);
         try {
-            // 1. Pedir la estructura de la plantilla a la DB
-            const templateRes = await api.get(`/templates/${templateId}`);
-            
+            // 1. Cargar Plantilla Base
+            const templateRes = await api.get(`/templates/${tId}`);
             if (!templateRes.template) {
                 throw new Error("Plantilla no encontrada en la base de datos.");
             }
 
-            console.log("✅ Plantilla base cargada:", templateRes.template.name);
-
-            // 2. Decidir qué cargar: ¿Es una edición vieja o una nueva?
-            if (activityIdParam) {
-                console.log("✏️ Cargando actividad guardada ID:", activityIdParam);
+            // 2. Decidir qué cargar
+            if (aId) {
                 try {
-                    const activityRes = await api.get(`/api/activities/${activityIdParam}`);
+                    const activityRes = await api.get(`/api/activities/${aId}`);
                     if (activityRes.activity) {
                         baseElements = activityRes.activity.elements;
                     }
                 } catch (e) {
-                    console.warn("⚠️ Falló cargar actividad guardada, usando base.");
-                    baseElements = templateRes.template.base_elements;
+                    console.warn("Usando base por error al cargar actividad");
+                    baseElements = structuredClone(templateRes.template.base_elements);
                 }
             } else {
-                // Es nueva: usamos los elementos base de la plantilla
-                baseElements = templateRes.template.base_elements;
+                // CLAVE: structuredClone rompe la referencia para que no se mezclen
+                baseElements = structuredClone(templateRes.template.base_elements);
             }
-
         } catch (err) {
-            console.error("❌ Error fatal cargando editor:", err);
+            console.error("Error cargando editor:", err);
             errorMsg = "No se pudo cargar el editor. Verifica tu conexión.";
         } finally {
             isLoading = false;
+        }
+    }
+
+    // Efecto que se dispara cada vez que cambia el ID
+    $effect(() => {
+        if (currentTemplateId) {
+            loadEditorData(currentTemplateId, currentActivityId);
         }
     });
 </script>
@@ -67,12 +72,14 @@
         <a href="/dashboard/plantillas" class="btn-back">Volver a la biblioteca</a>
     </div>
 {:else if baseElements}
-    <TemplateEditor {templateId} {baseElements} />
+    {#key currentTemplateId + (currentActivityId || '')}
+        <TemplateEditor templateId={currentTemplateId} baseElements={baseElements} />
+    {/key}
 {/if}
 
 <style>
     .error-screen { 
-        height: 100vh; 
+        height: 100vh;
         display: flex; 
         flex-direction: column; 
         align-items: center; 

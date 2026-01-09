@@ -2,11 +2,10 @@ import { writable } from 'svelte/store';
 import { api } from '$lib/api';
 import { browser } from '$app/environment';
 
-interface User {
+export interface User {
     name: string;
     email?: string;
     id?: number;
-    // ELIMINADO: No token or sensitive data here
 }
 
 export const isAuthLoading = writable(true);
@@ -23,8 +22,6 @@ function createAuthStore() {
         }
     }
 
-    // Si encontramos usuario en localStorage, ya no estamos "cargando" (isAuthLoading = false)
-    // Esto evita el parpadeo o la expulsión al login.
     if (initialUser) {
         isAuthLoading.set(false);
     }
@@ -38,23 +35,20 @@ function createAuthStore() {
         // Verificar sesión real con el servidor (Cookie)
         checkAuth: async () => {
             if (!browser) return;
-            // No ponemos isAuthLoading a true aquí si ya tenemos usuario local
-            // para evitar que la UI parpadee. Lo hacemos silencioso.
             
             try {
                 const res = await api.get('/auth/me');
-                if (res.user) {
+                if (res && res.user) {
                     // Sesión válida: Actualizamos datos frescos
-                    const userData: User = res.user;
-                    set(userData);
-                    // CAMBIO: Guardamos solo la data no sensible
-                    localStorage.setItem('user_profile', JSON.stringify(userData));
+                    set(res.user);
+                    localStorage.setItem('user_profile', JSON.stringify(res.user));
                 } else {
-                    // Sesión inválida: Limpiamos
-                    throw new Error("Sesión expirada");
+                    // Sesión inválida pero quizás teníamos datos viejos en local
+                    // No lanzamos error para no romper la app, solo limpiamos silenciosamente
+                    set(null);
+                    localStorage.removeItem('user_profile');
                 }
             } catch (e) {
-                // Si falla la cookie, borramos todo y ahí sí expulsamos
                 set(null);
                 localStorage.removeItem('user_profile');
             } finally {
@@ -65,7 +59,6 @@ function createAuthStore() {
         loginSuccess: (userData: User) => {
             set(userData);
             if (browser) {
-                // CAMBIO: Guardamos solo la data no sensible
                 localStorage.setItem('user_profile', JSON.stringify(userData));
             }
             isAuthLoading.set(false);
@@ -74,13 +67,12 @@ function createAuthStore() {
         logout: async () => {
             try {
                 await api.post('/auth/logout', {});
-            } finally {
-                set(null);
-                if (browser) {
-                    localStorage.removeItem('user_profile');
-                    // Usamos window.location.href para asegurar limpieza de cookies y caché
-                    window.location.href = '/login'; 
-                }
+            } catch(e) { /* ignorar error de red al salir */ }
+            
+            set(null);
+            if (browser) {
+                localStorage.removeItem('user_profile');
+                window.location.href = '/login'; 
             }
         }
     };

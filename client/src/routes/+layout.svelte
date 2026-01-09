@@ -1,19 +1,23 @@
 <script>
+  // IMPORTANTE: Carga los estilos globales (Tailwind o tu CSS personalizado)
   import '../app.css';
+  
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import { browser } from '$app/environment';
   import { user } from '$lib/stores/auth';
   import Toaster from '$lib/components/ui/Toaster.svelte';
 
-  /** @type {{children: import('svelte').Snippet}} */
   let { children } = $props();
 
   const theme = writable(null);
+
   onMount(() => {
+    // Recuperar tema preferido
     const savedTheme = localStorage.getItem('theme');
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (savedTheme) { theme.set(savedTheme); } else { theme.set(systemPrefersDark ? 'dark' : 'light'); }
+    
     const unsubscribe = theme.subscribe(value => {
       if (browser && value) { 
         document.documentElement.setAttribute('data-theme', value);
@@ -21,7 +25,10 @@
       }
     });
 
-    user.checkAuth();
+    // Verificación de sesión segura
+    if (user && typeof user.checkAuth === 'function') {
+        user.checkAuth();
+    }
     
     return () => unsubscribe(); 
   });
@@ -44,25 +51,7 @@
 
 <style>
   .layout-wrapper { width: 100%; min-height: 100vh; background: var(--bg-main); transition: background-color 0.3s ease; }
-  
-  /* CORRECCIÓN UX: Posición fixed abajo-izquierda */
-  .theme-toggle { 
-    position: fixed; 
-    bottom: 1.5rem; 
-    left: 1.5rem; 
-    z-index: 1001; 
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-color); 
-    border-radius: 50%; 
-    width: 44px; 
-    height: 44px; 
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
-    transition: all 0.3s ease; 
-  }
+  .theme-toggle { position: fixed; bottom: 1.5rem; left: 1.5rem; z-index: 1001; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 50%; width: 44px; height: 44px; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); transition: all 0.3s ease; }
   .theme-toggle:hover { transform: scale(1.1) rotate(15deg); border-color: var(--primary-color); }
   .theme-toggle svg { width: 22px; height: 22px; color: var(--text-light); transition: color 0.3s ease; }
   .theme-toggle:hover svg { color: var(--primary-color); }
