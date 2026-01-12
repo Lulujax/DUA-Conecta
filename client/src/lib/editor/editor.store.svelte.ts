@@ -1,8 +1,39 @@
 import { tick } from 'svelte';
 
+// --- DEFINICIÓN DE TIPOS ---
+type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'line' | 'arrow';
+type TextAlign = 'left' | 'center' | 'right';
+
+interface EditorElement {
+	id: number;
+	type: 'text' | 'image' | 'shape';
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	z: number;
+	rotation?: number;
+	opacity?: number;
+    flipX?: boolean;
+	// Text props
+	content?: string;
+	fontSize?: number;
+	color?: string;
+	textAlign?: TextAlign;
+    fontFamily?: string;
+    lineHeight?: number;
+	// Image props
+	url?: string;
+	// Shape props
+	shapeType?: ShapeType;
+	fill?: string;
+	stroke?: string;
+	strokeWidth?: number;
+}
+
 // --- ESTADO ---
 let elements = $state<Array<EditorElement>>([]);
-let selectedIds = $state<number[]>([]); // Multiselección
+let selectedIds = $state<number[]>([]); 
 let nextZIndex = $state(1);
 let baseElements: Array<EditorElement> = [];
 let activityName = $state('Plantilla sin nombre');
@@ -65,7 +96,6 @@ function redo() { if (canRedo) loadStateFromHistory(historyIndex + 1); }
 // --- SELECCIÓN ---
 function selectElement(id: number, multi: boolean = false) {
     if (multi) {
-        // Toggle selección
         if (selectedIds.includes(id)) {
             selectedIds = selectedIds.filter(i => i !== id);
         } else {
@@ -102,14 +132,12 @@ function updateElement(id: number, data: any, isFinalChange: boolean = true) {
 
 function updateSelectedElement(data: any, isFinalChange: boolean = true) {
 	if (selectedIds.length === 0) return;
-    
     elements = elements.map(el => {
         if (selectedIds.includes(el.id)) {
             return { ...el, ...data };
         }
         return el;
     });
-
     if (isFinalChange) saveStateToHistory();
     if (!applyingHistory) hasUnsavedChanges = true;
 }
@@ -148,7 +176,6 @@ function duplicateSelectedElement() {
                 z: nextZIndex++
             };
         });
-
 	elements = [...elements, ...newElements];
 	selectedIds = newIds;
 	saveStateToHistory();
@@ -162,22 +189,15 @@ function copySelected() {
 
 function paste() {
     if (!clipboard || !Array.isArray(clipboard)) return;
-    
     const fixedOffset = 10;
     const newIds: number[] = [];
-
     const pastedElements = clipboard.map((el: any) => {
         el.x += fixedOffset;
         el.y += fixedOffset;
         const newId = Date.now() + Math.floor(Math.random() * 10000);
         newIds.push(newId);
-        return {
-            ...el,
-            id: newId,
-            z: nextZIndex++
-        };
+        return { ...el, id: newId, z: nextZIndex++ };
     });
-
     clipboard = pastedElements; 
     elements = [...elements, ...pastedElements];
     selectedIds = newIds;
@@ -219,7 +239,6 @@ function addImage(file: File, x = 50, y = 50) {
             const aspect = img.width / img.height;
 			const initialWidth = Math.min(150, img.width);
 			const initialHeight = aspect > 0 ? initialWidth / aspect : 150;
-			
 			const newElement: EditorElement = {
 				id: Date.now(), type: 'image', url,
 				x: Math.max(0, x - initialWidth/2), y: Math.max(0, y - initialHeight/2), 
@@ -261,10 +280,7 @@ function addShape(type: ShapeType) {
 }
 
 // --- ESTILOS ---
-function changeTextAlign(align: TextAlign) {
-    updateSelectedElement({ textAlign: align }, true);
-}
-
+function changeTextAlign(align: TextAlign) { updateSelectedElement({ textAlign: align }, true); }
 function changeFontSize(delta: number) {
     elements = elements.map(el => {
         if (selectedIds.includes(el.id) && el.type === 'text') {
@@ -275,7 +291,6 @@ function changeFontSize(delta: number) {
     });
     saveStateToHistory();
 }
-
 function updateFontSizeFromInput(event: Event) {
     const input = event.target as HTMLInputElement;
     let newSize = parseInt(input.value);
@@ -284,37 +299,55 @@ function updateFontSizeFromInput(event: Event) {
         updateSelectedElement({ fontSize: newSize }, true);
     }
 }
-
 function toggleFlip() {
     elements = elements.map(el => {
-        if (selectedIds.includes(el.id)) {
-            return { ...el, flipX: !el.flipX };
-        }
+        if (selectedIds.includes(el.id)) { return { ...el, flipX: !el.flipX }; }
         return el;
     });
     saveStateToHistory();
 }
-
-function changeLineHeight(newLineHeight: number) {
-    updateSelectedElement({ lineHeight: newLineHeight }, true);
-}
+function changeLineHeight(newLineHeight: number) { updateSelectedElement({ lineHeight: newLineHeight }, true); }
 
 // --- GESTIÓN GLOBAL ---
-function init(base: Array<any>, activityId: number | null, activityNameStr: string | null) {
-	const processedBase = base.map((el, i) => ({ ...el, z: el.z ?? (i + 1) }));
-	baseElements = structuredClone(processedBase);
+
+// *** AQUÍ ESTÁ LA CORRECCIÓN MAGISTRAL (init) ***
+function init(base: any, activityId: number | null, activityNameStr: string | null) {
+    let safeBase = [];
+
+    // 1. Si es array, lo usamos
+    if (Array.isArray(base)) {
+        safeBase = base;
+    } 
+    // 2. Si es texto (string), intentamos convertirlo
+    else if (typeof base === 'string') {
+        try {
+            safeBase = JSON.parse(base);
+        } catch (e) {
+            console.warn("No se pudo parsear los elementos, iniciando vacío:", e);
+            safeBase = [];
+        }
+    }
+    // 3. Si sigue sin ser array, array vacío por seguridad
+    if (!Array.isArray(safeBase)) safeBase = [];
+
+    // Ahora sí hacemos el map seguro
+	const processedBase = safeBase.map((el: any, i: number) => ({ ...el, z: el.z ?? (i + 1) }));
+	
+    baseElements = structuredClone(processedBase);
 	elements = structuredClone(processedBase);
 	history = [JSON.stringify(elements)];
 	historyIndex = 0;
-	const maxZ = elements.reduce((max, el) => Math.max(max, el.z), 0);
+	
+    const maxZ = elements.reduce((max, el) => Math.max(max, el.z), 0);
 	nextZIndex = maxZ + 1;
-	hasUnsavedChanges = false;
+	
+    hasUnsavedChanges = false;
 	currentActivityId = activityId;
 	activityName = activityNameStr || 'Plantilla sin nombre';
     selectedIds = [];
 }
 
-function setLoadedActivity(id: number, name: string, loadedElements: Array<any>) { init(loadedElements, id, name); }
+function setLoadedActivity(id: number, name: string, loadedElements: any) { init(loadedElements, id, name); }
 function resetToBase() { init(baseElements, null, 'Plantilla sin nombre'); }
 function setSavedAsNew(id: number, name: string) { currentActivityId = id; activityName = name; hasUnsavedChanges = false; }
 function setChangesSaved() { hasUnsavedChanges = false; }

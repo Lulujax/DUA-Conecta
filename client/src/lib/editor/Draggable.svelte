@@ -1,28 +1,30 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { editorStore } from './editor.store.svelte';
-
+	
 	let {
 		element,
 		isSelected,
+		zoomScale = 1, // Recibimos el zoom
 		onSelect,
 		allElements = [],
 		onShowSnapLine = (line: { type: 'vertical' | 'horizontal'; position: number | null }) => {}
 	} = $props<{
 		element: any;
 		isSelected: boolean;
+		zoomScale?: number;
 		onSelect: (id: number, e: MouseEvent | KeyboardEvent | TouchEvent) => void;
 		onUpdate: (id: number, data: any, isFinalChange: boolean) => void; 
 		allElements?: any[];
 		onShowSnapLine?: (line: { type: 'vertical' | 'horizontal'; position: number | null }) => void;
 	}>();
 
-	const snapThreshold = 5;
 	let isEditing = $state(false);
 	let textElementRef: HTMLElement | null = $state(null);
 	let wrapperRef: HTMLElement | null = null;
 	let clickTimeout: number | null = null;
 
+	// Sincronizar contenido
 	$effect(() => {
 		if (textElementRef && element.type === 'text') {
 			if (textElementRef.innerHTML !== element.content) {
@@ -31,7 +33,7 @@
 		}
 	});
 
-    $effect(() => {
+	$effect(() => {
         if (!isSelected && isEditing) {
             saveChanges();
             isEditing = false;
@@ -44,6 +46,7 @@
 		return { x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY };
 	}
 
+	// Lógica original de clicks (preservada)
 	function handleClick(e: MouseEvent | TouchEvent) {
 		if (e.type === 'click' && 'ontouchstart' in window) return;
 		if (isEditing && (e.target as HTMLElement)?.closest('.text-content')) return;
@@ -84,12 +87,12 @@
                 document.execCommand(command, false, value);
                 saveChanges();
                 isEditing = false;
-                 window.getSelection()?.removeAllRanges();
+                window.getSelection()?.removeAllRanges();
             });
         } else {
              textElementRef.focus();
              document.execCommand(command, false, value);
-             handleInput(null); 
+             handleInput(null);
         }
     }
 
@@ -97,71 +100,81 @@
         wrapperRef.addEventListener('toggle-list', onToggleListEvent as EventListener);
         wrapperRef.addEventListener('exec-cmd', onExecCmd as EventListener);
     }});
-    
     onDestroy(() => { if (wrapperRef) {
         wrapperRef.removeEventListener('toggle-list', onToggleListEvent as EventListener);
         wrapperRef.removeEventListener('exec-cmd', onExecCmd as EventListener);
     }});
 
-    function handleInput(e: Event | null) {
+	function handleInput(e: Event | null) {
 		if (!textElementRef) return;
         editorStore.updateElement(element.id, { content: textElementRef.innerHTML }, false);
 	}
-
     function saveChanges() {
         if (textElementRef) editorStore.updateElement(element.id, { content: textElementRef.innerHTML }, true);
     }
 
+	// --- LÓGICA DE ARRASTRE CORREGIDA (Start-Delta) ---
 	function onDragStart(e: MouseEvent | TouchEvent) {
 		if (e instanceof MouseEvent && e.button !== 0) return;
 		if (isEditing) return;
 		if ((e.target as HTMLElement)?.classList.contains('resize-handle') || (e.target as HTMLElement)?.classList.contains('rotate-handle')) return;
 		
 		e.preventDefault();
-        
-        if (!isSelected) {
-            onSelect(element.id, e);
-        }
+		if (!isSelected) { onSelect(element.id, e); }
 		
-		const coords = getCoords(e);
-		let lastX = coords.x;
-        let lastY = coords.y;
+		const startCoords = getCoords(e);
+        // Guardamos las coordenadas iniciales exactas del elemento al empezar
+        const startElementX = element.x;
+        const startElementY = element.y;
 		let didMove = false;
 
 		function onDragMove(ev: MouseEvent | TouchEvent) {
 			const moveCoords = getCoords(ev);
-            const dx = moveCoords.x - lastX;
-            const dy = moveCoords.y - lastY;
+            
+            // Calculamos la distancia TOTAL recorrida por el mouse desde el inicio
+            const totalDistX = moveCoords.x - startCoords.x;
+            const totalDistY = moveCoords.y - startCoords.y;
 
-			if (!didMove && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) { 
+            // Ajustamos esa distancia por el zoom
+            const adjustedDistX = totalDistX / zoomScale;
+            const adjustedDistY = totalDistY / zoomScale;
+
+            // Verificamos si se movió lo suficiente para considerarlo arrastre
+			if (!didMove && (Math.abs(adjustedDistX) > 1 || Math.abs(adjustedDistY) > 1)) { 
                 if (clickTimeout !== null) { window.clearTimeout(clickTimeout); clickTimeout = null; }
-                didMove = true; 
+                didMove = true;
             }
 
             if (didMove) {
-                editorStore.moveSelected(dx / 1, dy / 1);
-                lastX = moveCoords.x;
-                lastY = moveCoords.y;
+                // En lugar de sumar deltas frame a frame (que acumula error),
+                // calculamos la nueva posición absoluta basada en el inicio.
+                const newX = startElementX + adjustedDistX;
+                const newY = startElementY + adjustedDistY;
+                
+                // Actualizamos directamente la posición
+                editorStore.updateElement(element.id, { x: newX, y: newY }, false);
             }
 		}
 
 		function onDragEnd(ev: MouseEvent | TouchEvent) {
 			window.removeEventListener('mousemove', onDragMove); window.removeEventListener('mouseup', onDragEnd);
 			window.removeEventListener('touchmove', onDragMove); window.removeEventListener('touchend', onDragEnd);
-            if (didMove) {
-                editorStore.moveSelected(0, 0, true); 
+			if (didMove) {
+                // Guardar en historial
+                editorStore.updateElement(element.id, {}, true);
             } else if (clickTimeout !== null) { 
-                window.clearTimeout(clickTimeout); clickTimeout = null; onSelect(element.id, ev); 
+                window.clearTimeout(clickTimeout);
+                clickTimeout = null; onSelect(element.id, ev); 
             }
 		}
 		window.addEventListener('mousemove', onDragMove); window.addEventListener('mouseup', onDragEnd);
 		window.addEventListener('touchmove', onDragMove, { passive: false }); window.addEventListener('touchend', onDragEnd);
 	}
 
+    // --- LÓGICA DE REDIMENSIÓN CORREGIDA ---
 	function onResizeStart(e: MouseEvent | TouchEvent, handleType: 'tl' | 'tr' | 'bl' | 'br') {
 		e.preventDefault(); e.stopPropagation();
-		const coords = getCoords(e);
-		const startX = coords.x; const startY = coords.y;
+		const startCoords = getCoords(e);
 		const startElX = element.x; const startElY = element.y;
 		const startWidth = element.width; const startHeight = element.height;
 		let didResize = false;
@@ -169,21 +182,28 @@
 		function onResizeMove(ev: MouseEvent | TouchEvent) {
 			didResize = true;
 			const moveCoords = getCoords(ev);
-			const deltaX = moveCoords.x - startX; const deltaY = moveCoords.y - startY;
+            // Delta total ajustado por zoom
+			const deltaX = (moveCoords.x - startCoords.x) / zoomScale; 
+            const deltaY = (moveCoords.y - startCoords.y) / zoomScale;
+
 			let newX = startElX; let newY = startElY;
 			let newWidth = startWidth; let newHeight = startHeight;
 
 			switch (handleType) {
-				case 'br': newWidth = Math.max(10, startWidth + deltaX); newHeight = Math.max(10, startHeight + deltaY); break;
-				case 'bl': newWidth = Math.max(10, startWidth - deltaX); newHeight = Math.max(10, startHeight + deltaY); newX = startElX + deltaX; break;
-				case 'tr': newWidth = Math.max(10, startWidth + deltaX); newHeight = Math.max(10, startHeight - deltaY); newY = startElY + deltaY; break;
-				case 'tl': newWidth = Math.max(10, startWidth - deltaX); newHeight = Math.max(10, startHeight - deltaY); newX = startElX + deltaX; newY = startElY + deltaY; break;
+				case 'br': newWidth = Math.max(10, startWidth + deltaX);
+					newHeight = Math.max(10, startHeight + deltaY); break;
+				case 'bl': newWidth = Math.max(10, startWidth - deltaX);
+					newHeight = Math.max(10, startHeight + deltaY); newX = startElX + deltaX; break;
+				case 'tr': newWidth = Math.max(10, startWidth + deltaX);
+					newHeight = Math.max(10, startHeight - deltaY); newY = startElY + deltaY; break;
+				case 'tl': newWidth = Math.max(10, startWidth - deltaX);
+					newHeight = Math.max(10, startHeight - deltaY); newX = startElX + deltaX; newY = startElY + deltaY; break;
 			}
 			if (element.type === 'shape' && element.shapeType === 'circle') {
 				const size = Math.max(10, Math.max(newWidth, newHeight));
 				newWidth = size; newHeight = size;
 				if (handleType.includes('l')) newX = (startElX + startWidth / 2) - size / 2;
-                if (handleType.includes('t')) newY = (startElY + startHeight / 2) - size / 2;
+				if (handleType.includes('t')) newY = (startElY + startHeight / 2) - size / 2;
 			}
 			editorStore.updateElement(element.id, { x: newX, y: newY, width: newWidth, height: newHeight }, false);
 		}
@@ -201,11 +221,11 @@
 		e.preventDefault(); e.stopPropagation();
 		if (!wrapperRef) return;
 		const rect = wrapperRef.getBoundingClientRect();
-		const centerX = rect.left + rect.width / 2; const centerY = rect.top + rect.height / 2;
+		const centerX = rect.left + rect.width / 2;
+		const centerY = rect.top + rect.height / 2;
 		const coords = getCoords(e);
 		const startAngle = Math.atan2(coords.y - centerY, coords.x - centerX) * 180 / Math.PI;
 		const initialRotation = element.rotation || 0;
-		
 		function onRotateMove(ev: MouseEvent | TouchEvent) {
 			const mCoords = getCoords(ev);
 			const angle = Math.atan2(mCoords.y - centerY, mCoords.x - centerX) * 180 / Math.PI;
@@ -229,12 +249,10 @@
 			editorStore.updateElement(element.id, { content: textElementRef?.innerHTML ?? element.content }, true);
 		}
 	}
-
 	function onToggleListEvent(ev: CustomEvent) {
 		const type = ev.detail?.type;
 		if (type === 'ul' || type === 'ol') toggleList(type);
 	}
-
 	async function toggleList(listType: 'ul' | 'ol') {
 		if (!textElementRef) return;
 		if (!isEditing) { isEditing = true; await tick(); }
@@ -242,7 +260,6 @@
 		document.execCommand(listType === 'ul' ? 'insertUnorderedList' : 'insertOrderedList');
 		editorStore.updateElement(element.id, { content: textElementRef.innerHTML }, true);
 	}
-
 	function renderShapeSVG(el: any) {
 		const stroke = el.stroke || '#000'; const strokeWidth = el.strokeWidth || 4;
 		const w = el.width || 100; const h = el.height || 20;
@@ -294,7 +311,7 @@
             ></div> 
         {:else if element.type === 'shape'}
             <div class="element-content shape-content" style:width="100%" style:height="100%">
-                {@html renderShapeSVG(element)}
+                 {@html renderShapeSVG(element)}
             </div>
         {/if}
     </div>

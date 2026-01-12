@@ -4,16 +4,24 @@
     import { toast } from '$lib/stores/toast.svelte';
     import { fade, fly } from 'svelte/transition';
 
-    let activities: any[] = [];
-    let isLoading = true;
+    // Inicializamos como array vacío SIEMPRE
+    let activities: any[] = $state([]);
+    let isLoading = $state(true);
 
     onMount(async () => {
         try {
             const response = await api.get('/api/activities');
-            activities = response.activities;
+            // Protección: Si response.activities es undefined, usamos []
+            if (response && response.activities) {
+                activities = response.activities;
+            } else {
+                console.warn("Respuesta inesperada:", response);
+                activities = [];
+            }
         } catch (error) {
-            console.error(error);
-            toast.error("No se pudieron cargar tus actividades.");
+            console.error("Error cargando actividades:", error);
+            // No mostramos toast error al inicio para no saturar, pero el array queda vacío seguro
+            activities = []; 
         } finally {
             isLoading = false;
         }
@@ -46,7 +54,7 @@
             <div class="spinner"></div>
             <p>Recuperando tu trabajo...</p>
         </div>
-    {:else if activities.length === 0}
+    {:else if !activities || activities.length === 0}
         <div class="empty-state" in:fade>
             <div class="empty-icon">🎨</div>
             <h3>Tu galería está vacía</h3>

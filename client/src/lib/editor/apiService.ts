@@ -5,7 +5,13 @@ import { toast } from '$lib/stores/toast.svelte';
 async function loadActivity(id: number) {
 	try {
 		const result = await api.get(`/api/activities/${id}`);
-		editorStore.setLoadedActivity(result.activity.id, result.activity.name, result.activity.elements);
+        // Verificación de seguridad
+        if (result && result.activity) {
+            const elements = result.activity.elements || [];
+            editorStore.setLoadedActivity(result.activity.id, result.activity.name, elements);
+        } else {
+            throw new Error("Datos incompletos");
+        }
 	} catch (error) {
 		console.error('Fallo al cargar:', error);
 		toast.error('Error al cargar la actividad.');
@@ -13,7 +19,6 @@ async function loadActivity(id: number) {
 	}
 }
 
-// AHORA ACEPTA previewImg (OPCIONAL)
 async function saveChanges(templateId: string, previewImg: string | null = null) {
 	const nameToSave = editorStore.activityName.trim(); 
     const currentId = editorStore.currentActivityId;
@@ -30,7 +35,6 @@ async function saveChanges(templateId: string, previewImg: string | null = null)
 	const payload = editorStore.getActivityPayload(templateId);
     payload.name = nameToSave; 
     
-    // Agregamos la imagen al paquete de datos
     // @ts-ignore
     payload.previewImg = previewImg;
 

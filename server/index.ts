@@ -4,168 +4,143 @@ import { jwt } from '@elysiajs/jwt'
 import postgres from 'postgres'
 import bcrypt from 'bcryptjs'
 
-// --- CONFIGURACIÓN ---
 const isProduction = process.env.NODE_ENV === 'production';
+const sql = postgres(process.env.DATABASE_URL!, { ssl: { rejectUnauthorized: false }, prepare: false });
 
-// Conexión a Base de Datos
-const sql = postgres(process.env.DATABASE_URL!, { 
-    ssl: { rejectUnauthorized: false },
-    prepare: false 
-});
+// --- MIGRACIÓN A PRUEBA DE BALAS ---
+(async () => {
+    try {
+        console.log("🛠️ Verificando integridad de la Base de Datos...");
+        
+        // 1. Crear tablas base si no existen
+        await sql`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW())`;
+        await sql`CREATE TABLE IF NOT EXISTS templates (id SERIAL PRIMARY KEY, name TEXT NOT NULL, category TEXT, thumbnail_url TEXT, description TEXT, base_elements JSONB DEFAULT '[]', created_at TIMESTAMP DEFAULT NOW())`;
+        await sql`CREATE TABLE IF NOT EXISTS activities (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW())`;
+
+        // 2. FORZAR COLUMNAS FALTANTES (Esto arregla el error 500 si la tabla ya existía vieja)
+        await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS template_id INTEGER`;
+        await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS elements JSONB DEFAULT '[]'`;
+        await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS preview_img TEXT`;
+        await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`;
+
+        console.log("✅ Base de datos actualizada y lista.");
+    } catch (err) { 
+        console.error("⚠️ Error en migración:", err); 
+    }
+})();
 
 const app = new Elysia()
-    // 1. LOGGER DE ENTRADA
-    .onRequest(({ request }) => {
-        console.log(`🔔 ${request.method} ${request.url}`);
-    })
-    // 2. LOGGER DE ERRORES
-    .onError(({ code, error, set }) => {
-        console.error(`💥 ERROR CRÍTICO (${code}):`, error);
+    .onError(({ code, error }) => {
+        console.error(`💥 ERROR SERVER (${code}):`, error);
         return { error: error.toString() };
     })
-    // 3. CORS
-   .use(cors({
-        origin: true, 
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization'],
-        credentials: true, 
-    }))
-    .use(jwt({
-        name: 'jwt',
-        secret: process.env.JWT_SECRET || 'secreto-super-seguro-dev'
-    }))
-    // 4. SESIÓN
+   .use(cors({ origin: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'], credentials: true }))
+    .use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET || 'secret' }))
     .derive(async ({ jwt, cookie }) => {
         const token = cookie.auth_token?.value;
         if (!token) return { user: null };
-        try { 
-            const profile = await jwt.verify(token);
-            return { user: profile ? profile : null }; 
-        } 
-        catch (e) { return { user: null }; }
+        try { const p = await jwt.verify(token); return { user: p || null }; } catch { return { user: null }; }
     })
 
-    .get('/', () => ({ status: 'Backend DUA-Conecta Online 🚀' }))
-
-    // --- UTILIDAD PARA BORRAR USUARIO (Ruta temporal) ---
-    // Úsala así: http://localhost:3000/api/nuke-user?email=tu@correo.com
-    .get('/api/nuke-user', async ({ query }) => {
-        if (!query.email) return { error: "Falta el email" };
-        try {
-            // Normalizamos también aquí por si acaso
-            const emailToDelete = String(query.email).toLowerCase().trim();
-            await sql`DELETE FROM users WHERE email = ${emailToDelete}`;
-            return { success: `Usuario ${emailToDelete} eliminado. ¡Ya puedes registrarte de nuevo!` };
-        } catch (e) {
-            return { error: String(e) };
-        }
-    })
-
-    // --- RUTAS DE PLANTILLAS ---
-    .get('/templates', async () => {
-        try {
-            const templates = await sql`
-                SELECT id, name, category, thumbnail_url, description, base_elements 
-                FROM templates 
-                ORDER BY id ASC
-            `;
-            return { templates };
-        } catch (e) {
-            console.error("Error cargando lista de plantillas:", e);
-            return { error: "Error cargando plantillas" };
-        }
-    })
-    
-    .get('/templates/:id', async ({ params: { id }, set }) => {
-        try {
-            const templateId = parseInt(id);
-            if (isNaN(templateId)) { set.status = 400; return { error: "ID inválido" }; }
-
-            const [t] = await sql`SELECT * FROM templates WHERE id = ${templateId}`;
-            
-            if (!t) { 
-                set.status = 404; return { error: 'No encontrada' }; 
+    // --- RUTAS DE ACTIVIDADES ---
+    .group('/api/activities', app => app
+        .get('/', async ({ user, set }) => {
+            if (!user) { set.status = 401; return { error: 'No autorizado' }; }
+            try {
+                // Obtenemos las actividades. Si falla, devolvemos array vacío.
+                const activities = await sql`SELECT * FROM activities WHERE user_id = ${(user as any).userId} ORDER BY updated_at DESC`;
+                return { activities };
+            } catch (e) { 
+                console.error("Error al listar:", e);
+                return { activities: [] }; 
             }
-            
-            // Protección contra datos corruptos en la DB
-            if (!t.base_elements) t.base_elements = [];
+        })
 
-            return { template: t };
-        } catch(e) {
-            console.error(`💥 ERROR CARGANDO PLANTILLA ${id}:`, e);
-            set.status = 500; return { error: String(e) };
-        }
-    })
-
-    // --- AUTENTICACIÓN ---
-    .group('/auth', app => app
-        .post('/register', async ({ body, set }) => {
-            const { name, email, password } = body as any;
+        .post('/save', async ({ body, user, set }) => {
+            if (!user) { set.status = 401; return { error: 'Debes iniciar sesión' }; }
             
-            // MEJORA UX: Convertir a minúsculas y quitar espacios
-            const cleanEmail = String(email).toLowerCase().trim();
+            // Log para que veas qué llega
+            console.log("📝 Guardando actividad:", body);
+
+            const { name, templateId, elements, previewImg } = body as any;
 
             try {
-                const [existing] = await sql`SELECT id FROM users WHERE email = ${cleanEmail}`;
-                if (existing) {
-                    set.status = 400; return { error: 'El correo ya existe.' };
-                }
-
-                const hashed = await bcrypt.hash(password, 10);
+                // Limpieza de datos crítica
+                let tId = parseInt(templateId);
+                if (isNaN(tId)) tId = null; // Si no es número, enviamos NULL (evita crash)
                 
-                await sql`INSERT INTO users (name, email, password_hash) VALUES (${name}, ${cleanEmail}, ${hashed})`;
+                const safeElements = JSON.stringify(elements || []);
+
+                const [newActivity] = await sql`
+                    INSERT INTO activities (user_id, template_id, name, elements, preview_img)
+                    VALUES (${(user as any).userId}, ${tId}, ${name}, ${safeElements}::jsonb, ${previewImg})
+                    RETURNING id
+                `;
+                return { success: true, activityId: newActivity.id, message: "¡Guardado exitoso!" };
+            } catch (e) {
+                console.error("❌ Error CRÍTICO al guardar:", e);
+                set.status = 500; return { error: "Error de base de datos. Revisa la consola del servidor." };
+            }
+        })
+
+        .put('/:id', async ({ params: { id }, body, user, set }) => {
+            if (!user) { set.status = 401; return { error: 'No autorizado' }; }
+            const { name, elements, previewImg } = body as any;
+            try {
+                const safeElements = JSON.stringify(elements || []);
+                const [updated] = await sql`
+                    UPDATE activities 
+                    SET name = ${name}, elements = ${safeElements}::jsonb, preview_img = ${previewImg}, updated_at = NOW()
+                    WHERE id = ${id} AND user_id = ${(user as any).userId}
+                    RETURNING id
+                `;
+                if (!updated) { set.status = 404; return { error: "No encontrada" }; }
                 return { success: true };
-            } catch (err) { 
-                set.status = 500; return { error: `Error registro: ${err}` }; 
+            } catch (e) {
+                set.status = 500; return { error: String(e) };
             }
         })
 
+        .get('/:id', async ({ params: { id }, user, set }) => {
+            if (!user) { set.status = 401; return { error: 'No autorizado' }; }
+            const [act] = await sql`SELECT * FROM activities WHERE id = ${id} AND user_id = ${(user as any).userId}`;
+            return { activity: act || null };
+        })
+
+        .delete('/:id', async ({ params: { id }, user }) => {
+            if (!user) return { error: 'No' };
+            await sql`DELETE FROM activities WHERE id = ${id} AND user_id = ${(user as any).userId}`;
+            return { success: true };
+        })
+    )
+    
+    // --- AUTH & TEMPLATES ---
+    .get('/templates', async () => {
+        try { return { templates: await sql`SELECT * FROM templates ORDER BY id ASC` }; } catch { return { templates: [] }; }
+    })
+    .get('/templates/:id', async ({ params: { id }, set }) => {
+        const tId = parseInt(id);
+        if(isNaN(tId)) return { template: null };
+        const [t] = await sql`SELECT * FROM templates WHERE id = ${tId}`;
+        return { template: t || null };
+    })
+    .group('/auth', app => app
         .post('/login', async ({ body, jwt, cookie, set }) => {
-            try {
-                const { email, password } = body as any;
-                
-                // MEJORA UX: Normalizamos el input del usuario antes de buscar
-                const cleanEmail = String(email).toLowerCase().trim();
-
-                const [user] = await sql`SELECT * FROM users WHERE email = ${cleanEmail}`;
-                
-                if (!user) {
-                    set.status = 401; return { error: 'Usuario no encontrado' };
-                }
-
-                const isValid = await bcrypt.compare(password, user.password_hash);
-                
-                if (!isValid) {
-                    set.status = 401; return { error: 'Contraseña incorrecta' };
-                }
-                
-                const token = await jwt.sign({ userId: user.id, name: user.name });
-                
-                cookie.auth_token.set({
-                    value: token,
-                    httpOnly: true,
-                    secure: isProduction, 
-                    sameSite: isProduction ? 'none' : 'lax',
-                    maxAge: 7 * 86400,
-                    path: '/'
-                });
-
-                return { success: true, user: { name: user.name, email: user.email } }; 
-            } catch (err) {
-                console.error("Login Error:", err);
-                set.status = 500; return { error: `Error login: ${err}` };
-            }
+            const { email, password } = body as any;
+            const [u] = await sql`SELECT * FROM users WHERE email = ${String(email).toLowerCase().trim()}`;
+            if (!u || !(await bcrypt.compare(password, u.password_hash))) { set.status = 401; return { error: 'Credenciales inválidas' }; }
+            cookie.auth_token.set({ value: await jwt.sign({ userId: u.id, name: u.name }), httpOnly: true, path: '/' });
+            return { success: true, user: { name: u.name } };
         })
-
-        .get('/me', ({ user }) => {
-            return { user: user ? { name: (user as any).name, id: (user as any).userId } : null };
+        .post('/register', async ({ body }) => {
+            const { name, email, password } = body as any;
+            const hashed = await bcrypt.hash(password, 10);
+            await sql`INSERT INTO users (name, email, password_hash) VALUES (${name}, ${String(email).toLowerCase().trim()}, ${hashed})`;
+            return { success: true };
         })
-        
-        .post('/logout', ({ cookie }) => { 
-            cookie.auth_token.remove(); 
-            return { success: true }; 
-        })
+        .get('/me', ({ user }) => ({ user }))
+        .post('/logout', ({ cookie }) => { cookie.auth_token.remove(); return { success: true }; })
     )
     .listen(process.env.PORT || 3000);
 
-console.log(`🚀 Servidor listo en puerto ${process.env.PORT || 3000}`);
+console.log(`🚀 Servidor listo en http://localhost:${process.env.PORT || 3000}`);

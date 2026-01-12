@@ -88,7 +88,7 @@
 	function handleKeyDown(event: KeyboardEvent) {
 		if ((event.target as HTMLElement)?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement)?.tagName)) return;
 		
-        if (event.ctrlKey || event.metaKey) {
+		if (event.ctrlKey || event.metaKey) {
 			const key = event.key.toLowerCase();
             if (key === 'z') { event.preventDefault(); editorStore.undo(); }
 			else if (key === 'y' || (event.shiftKey && key === 'z')) { event.preventDefault(); editorStore.redo(); }
@@ -106,8 +106,8 @@
 	});
 </script>
 
-<main class="editor-layout">
-	<EditorSidebar {templateId} bind:canvasContainerRef={canvasContainerRef} />
+<div class="editor-layout">
+    <EditorSidebar {templateId} bind:canvasContainerRef={canvasContainerRef} />
 	
 	<div class="editor-main-area">
 		{#if editorStore.selectedElement}
@@ -118,13 +118,14 @@
 			{/if}
 		{/if}
 
-		<div class="editor-canvas-area" onclick={deselectCanvas} ontouchend={deselectCanvas} ondragover={handleDragOver} ondrop={handleDrop}>
+		<div class="editor-canvas-area" onclick={deselectCanvas} ontouchend={deselectCanvas} ondragover={handleDragOver} ondrop={handleDrop} role="button" tabindex="0">
 			<div class="scale-wrapper" style:transform="scale({zoomScale})">
-				<div class="canvas-container" onmousedown={deselectCanvas} ontouchstart={deselectCanvas} bind:this={canvasContainerRef}>
+				<div class="canvas-container" onmousedown={deselectCanvas} ontouchstart={deselectCanvas} bind:this={canvasContainerRef} role="button" tabindex="0">
 					{#each editorStore.elements as element (element.id)}
 						<Draggable
 							data-element-id={element.id}
 							{element}
+                            {zoomScale} 
 							isSelected={editorStore.selectedIds.includes(element.id)}
 							onSelect={(id, e) => {
                                 const isMulti = (e instanceof MouseEvent || e instanceof KeyboardEvent) && (e.ctrlKey || e.metaKey || e.shiftKey);
@@ -141,7 +142,7 @@
 			</div>
 		</div>
 	</div>
-</main>
+</div>
 
 <style>
 	.editor-layout { display: flex; height: 100vh; overflow: hidden; flex-direction: row; }
