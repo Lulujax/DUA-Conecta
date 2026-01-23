@@ -1,170 +1,103 @@
 <script lang="ts">
-    import { goto } from '$app/navigation';
-    import { PUBLIC_API_URL } from '$env/static/public';
+	import { goto } from '$app/navigation';
+	import { api } from '$lib/api';
+    import { toast } from '$lib/stores/toast.svelte';
+    import PasswordStrength from '$lib/components/ui/PasswordStrength.svelte';
 
-    let isLoading = false;
-    let passwordFieldType = 'password';
-    let confirmPasswordFieldType = 'password';
-    let formError = '';
-    
-    // NUEVO: Estado del checkbox legal
-    let acceptedTerms = false;
+	let name = $state('');
+	let email = $state('');
+	let password = $state('');
+    let isPasswordValid = $state(false);
+	let isLoading = $state(false);
 
-    let formData = {
-        name: '',
-        email: '',
-        password: '',
-        confirmPassword: ''
-    };
-
-    function togglePasswordVisibility() {
-        passwordFieldType = passwordFieldType === 'password' ? 'text' : 'password';
-    }
-    
-    function toggleConfirmPasswordVisibility() {
-        confirmPasswordFieldType = confirmPasswordFieldType === 'password' ? 'text' : 'password';
-    }
-
-    async function handleSubmit() {
-        // VALIDACIÓN PREVIA
-        if (!acceptedTerms) {
-            formError = 'Debes aceptar los Términos y Condiciones para continuar.';
-            return;
-        }
-
-        if (formData.password !== formData.confirmPassword) {
-            formError = 'Las contraseñas no coinciden.';
-            return;
-        }
-
-        isLoading = true;
-        formError = '';
-
-        try {
-            const response = await fetch(`${PUBLIC_API_URL}/auth/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: formData.name,
-                    email: formData.email,
-                    password: formData.password,
-                }),
-            });
-
-            if (!response.headers.get('content-type')?.includes('application/json')) {
-                throw new Error(`Respuesta inesperada. Código: ${response.status}`);
-            }
-            
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Error al registrar.');
-            }
-
-            alert('¡Registro exitoso! Por favor, inicia sesión.');
-            await goto('/login');
-
-        } catch (error) {
-            if (error instanceof Error) {
-                formError = error.message;
-            } else {
-                formError = "Error desconocido."
-            }
-        } finally {
-            isLoading = false;
-        }
-    }
+	async function handleRegister(e: Event) {
+		e.preventDefault();
+        if (!isPasswordValid) { toast.error("Tu contraseña debe ser segura."); return; }
+		isLoading = true;
+		try {
+			const res = await api.post('/auth/register', { name, email, password });
+			if (res.success) {
+                toast.success('¡Cuenta creada! Ya puedes entrar.');
+				goto('/login');
+			}
+		} catch (err: any) {
+            toast.error(err.message || 'Error al registrarse.');
+		} finally { isLoading = false; }
+	}
 </script>
 
-<svelte:head>
-    <title>Registro - DUA-Conecta</title>
-</svelte:head>
-
-<div class="auth-wrapper">
-    <div class="auth-card">
-         <a href="/" class="back-link">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-            <span>Volver al Inicio</span>
+<div class="auth-layout">
+	<div class="auth-card">
+        <a href="/" class="home-link">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            <span>Inicio</span>
         </a>
 
-        <h2>Crea tu Cuenta</h2>
-        <p class="subtitle">Únete a la comunidad y empieza a transformar la educación.</p>
-        
-        <form on:submit|preventDefault={handleSubmit}>
-            <div class="form-group">
-                <label for="name">Nombre Completo</label>
-                <input type="text" id="name" name="name" required placeholder="Tu Nombre y Apellido" bind:value={formData.name} />
-            </div>
-            <div class="form-group">
-                <label for="email">Correo Electrónico</label>
-                <input type="email" id="email" name="email" required placeholder="tu@correo.com" bind:value={formData.email} />
-            </div>
-            <div class="form-group">
-                <label for="password">Contraseña</label>
-                <div class="password-group">
-                    <input type={passwordFieldType} id="password" name="password" required placeholder="Mínimo 8 caracteres" bind:value={formData.password} />
-                     <button type="button" class="password-toggle" on:click={togglePasswordVisibility}>
-                        {#if passwordFieldType === 'password'}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>{:else}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>{/if}
-                    </button>
-                </div>
-            </div>
-             <div class="form-group">
-                <label for="confirm-password">Confirmar Contraseña</label>
-                <div class="password-group">
-                    <input type={confirmPasswordFieldType} id="confirm-password" name="confirm-password" required placeholder="Repite tu contraseña" bind:value={formData.confirmPassword} />
-                     <button type="button" class="password-toggle" on:click={toggleConfirmPasswordVisibility}>
-                         {#if confirmPasswordFieldType === 'password'}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>{:else}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>{/if}
-                    </button>
-                </div>
-            </div>
-
-            <div class="terms-group">
-                <input type="checkbox" id="terms" bind:checked={acceptedTerms} />
-                <label for="terms">
-                    He leído y acepto los <a href="/legal/terminos" target="_blank">Términos</a> y la <a href="/legal/privacidad" target="_blank">Política de Privacidad</a>.
-                </label>
-            </div>
-
-            {#if formError}
-                 <p class="error-message">{formError}</p>
-            {/if}
-
-            <button type="submit" class="btn-primary" disabled={isLoading || !acceptedTerms}>
-                {#if isLoading}
-                    <div class="spinner"></div>
-                {:else}
-                     Crear Cuenta
-                {/if}
-            </button>
-        </form>
-
-        <div class="switch-link">
-            <p>¿Ya tienes una cuenta? <a href="/login">Inicia Sesión</a></p>
+        <div class="icon-header">🚀</div>
+		<h1>Crear Cuenta</h1>
+		<p class="subtitle">Únete a DUA-Conecta hoy mismo.</p>
+		
+		<form onsubmit={handleRegister}>
+			<div class="form-group">
+				<label for="name">Nombre Completo</label>
+				<input type="text" id="name" bind:value={name} placeholder="Juan Pérez" required class="themed-input" />
+			</div>
+			
+			<div class="form-group">
+				<label for="email">Correo Electrónico</label>
+				<input type="email" id="email" bind:value={email} placeholder="juan@ejemplo.com" required class="themed-input" />
+			</div>
+			
+			<div class="form-group">
+				<label for="password">Contraseña</label>
+                <PasswordStrength bind:password bind:isValid={isPasswordValid} />
+			</div>
+			
+			<button type="submit" class="btn-primary" disabled={isLoading || !isPasswordValid}>
+				{isLoading ? 'Registrando...' : 'Registrarse'}
+			</button>
+		</form>
+		
+        <div class="card-footer">
+            <span class="footer-text">¿Ya tienes cuenta?</span>
+            <a href="/login" class="action-link">Inicia sesión aquí</a>
         </div>
-    </div>
+	</div>
 </div>
 
 <style>
-    .auth-card { position: relative; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 24px; padding: 2.5rem; width: 100%; max-width: 450px; text-align: center; box-shadow: 0 10px 30px rgba(160,132,232,.1); }
-    .auth-wrapper { display: flex; justify-content: center; align-items: flex-start; padding: 6rem 1.5rem; min-height: 80vh; }
-    .back-link { position: absolute; top: 1.5rem; left: 1.5rem; display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: var(--text-light); font-weight: 600; font-size: .9rem; transition: color .3s ease; }
-    .back-link:hover { color: var(--primary-color); }
-    h2 { font-size: 2rem; font-weight: 800; color: var(--text-dark); margin: 0 0 .5rem 0; }
-    .subtitle { color: var(--text-light); margin-bottom: 2.5rem; }
-    .form-group { text-align: left; margin-bottom: 1.5rem; }
-    .form-group label { display: block; font-weight: 600; margin-bottom: .5rem; font-size: .9rem; color: var(--text-dark); }
-    .form-group input { width: 100%; padding: .9rem 1rem; border-radius: 12px; border: 1px solid var(--border-color); background-color: var(--bg-section); font-size: 1rem; color: var(--text-dark); }
-    .password-group { position: relative; }
-    .password-group input { padding-right: 3rem; }
-    .password-toggle { position: absolute; top: 50%; right: .5rem; transform: translateY(-50%); background: 0 0; border: none; cursor: pointer; color: var(--text-light); }
-    .btn-primary { width: 100%; padding: .9rem; font-size: 1rem; margin-top: 1rem; border-radius: 50px; background: linear-gradient(45deg, var(--primary-color), var(--primary-hover)); color: white; border: none; font-weight: 700; cursor: pointer; transition: opacity 0.3s; }
-    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-    .error-message { color: #e53e3e; background: rgba(229, 62, 62, 0.1); padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem; }
-    .switch-link { margin-top: 2rem; font-size: .9rem; color: var(--text-light); }
-    .switch-link a { color: var(--primary-color); font-weight: 600; text-decoration: none; }
+	.auth-layout { display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: var(--bg-section); padding: 1rem; }
+    .auth-card { background-color: var(--bg-card); padding: 2.5rem; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); width: 100%; max-width: 420px; text-align: center; border: 1px solid var(--border-color); position: relative; }
 
-    /* Estilos del Checkbox Legal */
-    .terms-group { display: flex; align-items: flex-start; gap: 0.8rem; text-align: left; margin-bottom: 1.5rem; font-size: 0.9rem; color: var(--text-light); }
-    .terms-group input { margin-top: 0.25rem; cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary-color); }
-    .terms-group a { color: var(--primary-color); text-decoration: underline; }
+    /* ESTILO BOTÓN INICIO */
+    .home-link { position: absolute; top: 1.5rem; left: 1.5rem; display: flex; align-items: center; gap: 8px; color: var(--text-light); font-weight: 600; text-decoration: none; padding: 8px 12px; border-radius: 12px; transition: all 0.2s; z-index: 10; background-color: var(--bg-section); }
+    .home-link:hover { color: var(--primary-color); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+
+    .icon-header { font-size: 3rem; margin-bottom: 1rem; background-color: var(--bg-section); width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; border-radius: 50%; margin: 0 auto; border: 1px solid var(--border-color); margin-top: 1rem; }
+	
+	h1 { margin-bottom: 0.5rem; color: var(--text-dark); font-size: 1.8rem; font-weight: 800; }
+	.subtitle { color: var(--text-light); margin-bottom: 2rem; font-size: 0.95rem; }
+    
+	.form-group { margin-bottom: 1.5rem; text-align: left; }
+	label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--text-dark); font-size: 0.9rem; }
+    
+	.themed-input { width: 100%; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 1rem; background-color: var(--bg-section); color: var(--text-dark); transition: all 0.2s; box-sizing: border-box; }
+	.themed-input:focus { border-color: var(--primary-color); outline: none; background-color: var(--bg-card); box-shadow: 0 0 0 3px rgba(160, 132, 232, 0.2); }
+	
+	.btn-primary { width: 100%; padding: 14px; background-color: var(--primary-color); color: white; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+	.btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+	.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+	
+    .card-footer { margin-top: 2rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem; display: flex; justify-content: center; align-items: center; gap: 6px; width: 100%; }
+    .footer-text { color: var(--text-light); font-size: 0.95rem; }
+    .action-link { color: var(--primary-color); text-decoration: none; font-weight: 700; font-size: 0.95rem; }
+    .action-link:hover { text-decoration: underline; }
+
+    /* --- SOLUCIÓN MÓVIL --- */
+    @media (max-width: 480px) {
+        .auth-layout { align-items: flex-start; padding-top: 2rem; }
+        .auth-card { padding: 1.5rem; }
+        .home-link { position: relative; top: auto; left: auto; display: inline-flex; margin-bottom: 1.5rem; align-self: flex-start; background: none; padding: 0; }
+        .icon-header { margin-top: 0; }
+    }
 </style>

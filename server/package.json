@@ -9,7 +9,7 @@
     "@elysiajs/cors": "latest",
     "@elysiajs/jwt": "latest",
     "@types/bcryptjs": "^3.0.0",
-    "@types/nodemailer": "^7.0.4",
+    "@types/nodemailer": "^7.0.5",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -17,7 +17,7 @@
     "express": "^5.2.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.3",
-    "nodemailer": "^7.0.10",
+    "nodemailer": "^7.0.12",
     "postgres": "^3.4.8",
     "resend": "^3.5.0",
     "zod": "^3.25.76"
