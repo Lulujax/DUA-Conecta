@@ -5,24 +5,34 @@ import postgres from 'postgres'
 import bcrypt from 'bcryptjs'
 import nodemailer from 'nodemailer'
 
-// 1. CONEXIÓN A BASE DE DATOS
+// --- CLAVE PEXELS INTEGRADA ---
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY || "FkomuRcVuCwLLqNyPJb66W4ed38f0PsWvr3DXIdwB5Mr8a5qOC6qa4ai";
+
+// 1. CONEXIÓN DB (Robusta)
 const sql = postgres(process.env.DATABASE_URL!, { ssl: { rejectUnauthorized: false }, prepare: false });
 
-// 2. CONFIGURACIÓN DEL CORREO (Gmail)
+// 2. CONFIGURACIÓN CORREO (MODO SEGURO SSL PARA RENDER)
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: false,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    port: 465, // Puerto SSL Directo (Arregla el bloqueo en Render)
+    secure: true, // Obligatorio para puerto 465
+    auth: { 
+        user: process.env.SMTP_USER, 
+        pass: process.env.SMTP_PASS 
+    },
+    tls: {
+        rejectUnauthorized: false // Permite certificados compartidos de Render
+    }
 });
 
-// 3. MIGRACIÓN AUTOMÁTICA (Crea tablas si no existen)
+// 3. MIGRACIÓN AUTOMÁTICA
 (async () => {
     try {
         console.log("🛠️ Verificando tablas...");
         await sql`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW(), reset_token TEXT, reset_expires TIMESTAMP)`;
         await sql`CREATE TABLE IF NOT EXISTS templates (id SERIAL PRIMARY KEY, name TEXT NOT NULL, category TEXT, thumbnail_url TEXT, description TEXT, base_elements JSONB DEFAULT '[]', created_at TIMESTAMP DEFAULT NOW())`;
         await sql`CREATE TABLE IF NOT EXISTS activities (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW(), template_id INTEGER, elements JSONB DEFAULT '[]', preview_img TEXT, updated_at TIMESTAMP DEFAULT NOW())`;
+        // Asegurar columnas
         await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS template_id INTEGER`;
         await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS elements JSONB DEFAULT '[]'`;
         await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS preview_img TEXT`;
@@ -34,15 +44,21 @@ const transporter = nodemailer.createTransport({
 })();
 
 const app = new Elysia()
-    // MANEJO DE ERRORES GLOBAL
     .onError(({ code, error, set }) => {
         const msg = error.toString();
+        // Errores conocidos
         if (msg.includes('misma')) { set.status = 400; return { error: "⚠️ La nueva contraseña es igual a la actual." }; }
         if (msg.includes('inválido') || msg.includes('expirado')) { set.status = 401; return { error: "El enlace es inválido o ha expirado." }; }
         if (msg.includes('no encontrado')) { set.status = 404; return { error: "Usuario no encontrado." }; }
         return { error: msg };
     })
-    .use(cors({ origin: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'], credentials: true }))
+    // CORS PARA VERCEL
+   .use(cors({ 
+        origin: true, // Acepta peticiones de tu Vercel
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
+        allowedHeaders: ['Content-Type', 'Authorization'], 
+        credentials: true // Importante para las cookies
+    }))
     .use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET || 'secret' }))
     .derive(async ({ jwt, cookie }) => {
         const token = cookie.auth_token?.value;
@@ -50,47 +66,38 @@ const app = new Elysia()
         try { const p = await jwt.verify(token); return { user: p || null }; } catch { return { user: null }; }
     })
 
-    // --- NUEVO: RUTA PARA IMÁGENES (PEXELS) ---
+    // --- RUTA PEXELS ---
     .group('/api/external', app => app
         .get('/images', async ({ query, set }) => {
             const q = query.q ? String(query.q) : 'school';
             const page = query.page ? String(query.page) : '1';
-            const apiKey = process.env.PEXELS_API_KEY; // Lee la clave del .env
-
-            if (!apiKey) {
-                console.error("❌ Faltan credenciales de Pexels");
-                set.status = 500; 
-                return { error: "Servidor mal configurado (Falta API Key)" };
-            }
 
             try {
-                // El servidor llama a Pexels (Tu clave nunca toca el navegador del usuario)
                 const response = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=20&page=${page}&locale=es-ES`, {
-                    headers: { Authorization: apiKey }
+                    headers: { Authorization: PEXELS_API_KEY }
                 });
 
-                if (!response.ok) throw new Error(`Pexels Error: ${response.statusText}`);
-
+                if (!response.ok) throw new Error(`Pexels: ${response.statusText}`);
                 const data: any = await response.json();
                 
-                // Filtramos solo lo útil
                 const images = data.photos.map((p: any) => ({
                     id: p.id,
-                    url: p.src.large,      // Calidad alta para el editor
-                    thumbnail: p.src.medium, // Calidad media para la galería rápida
-                    alt: p.alt || 'Imagen sin título',
-                    photographer: p.photographer
+                    url: p.src.large2x || p.src.large,
+                    thumbnail: p.src.medium,
+                    alt: p.alt || 'Imagen',
+                    width: p.width,
+                    height: p.height
                 }));
 
                 return { success: true, images };
             } catch (error) {
-                console.error("Error buscando imágenes:", error);
+                console.error("Error imágenes:", error);
                 return { success: false, images: [] };
             }
         })
     )
 
-    // --- RUTAS DE ACTIVIDADES ---
+    // --- ACTIVIDADES ---
     .group('/api/activities', app => app
         .get('/', async ({ user }) => { if (!user) return { activities: [] }; try { return { activities: await sql`SELECT * FROM activities WHERE user_id = ${(user as any).userId} ORDER BY updated_at DESC` }; } catch { return { activities: [] }; } })
         .post('/save', async ({ body, user, set }) => {
@@ -133,7 +140,17 @@ const app = new Elysia()
             const { email, password } = body as any;
             const [u] = await sql`SELECT * FROM users WHERE email = ${String(email).toLowerCase().trim()}`;
             if (!u || !(await bcrypt.compare(String(password).trim(), u.password_hash))) { set.status = 401; return { error: 'Credenciales inválidas' }; }
-            cookie.auth_token.set({ value: await jwt.sign({ userId: u.id, name: u.name, email: u.email }), httpOnly: true, path: '/' });
+            
+            // COOKIE BLINDADA PARA PRODUCCIÓN (Vercel <-> Render)
+            cookie.auth_token.set({ 
+                value: await jwt.sign({ userId: u.id, name: u.name, email: u.email }), 
+                httpOnly: true, 
+                path: '/',
+                secure: true,      // Obligatorio en HTTPS
+                sameSite: 'none',  // Obligatorio Cross-Site
+                maxAge: 60 * 60 * 24 * 7 // 7 días
+            });
+            
             return { success: true, user: { name: u.name, email: u.email } };
         })
         .post('/register', async ({ body, set }) => {
@@ -144,9 +161,8 @@ const app = new Elysia()
                 return { success: true };
             } catch (e) { set.status = 400; return { error: "Registrado" }; }
         })
-        
-        // RECUPERACIÓN (EMAIL CON HTML)
         .post('/forgot-password', async ({ body }) => {
+            console.log("📨 Intentando enviar correo...");
             const { email } = body as any;
             const cleanEmail = String(email).toLowerCase().trim();
             const [u] = await sql`SELECT id, name FROM users WHERE email = ${cleanEmail}`;
@@ -154,7 +170,8 @@ const app = new Elysia()
 
             const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
             await sql`UPDATE users SET reset_token = ${token}, reset_expires = NOW() + INTERVAL '30 minutes' WHERE id = ${u.id}`;
-
+            
+            // URL dinámica: Si FRONTEND_URL no está, usa localhost
             const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
             const resetLink = `${baseUrl}/reset-password?token=${token}&email=${cleanEmail}`;
 
@@ -164,17 +181,24 @@ const app = new Elysia()
                     to: cleanEmail,
                     subject: '🔒 Restablecer contraseña',
                     html: `
-                        <div style="font-family: Arial, sans-serif; padding: 20px; text-align: center;">
-                            <h2 style="color: #A084E8;">DUA-Conecta</h2>
-                            <p>Hola <strong>${u.name}</strong>, para cambiar tu contraseña haz clic aquí:</p>
-                            <a href="${resetLink}" style="background: #A084E8; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Cambiar Contraseña</a>
+                        <div style="font-family: Arial, sans-serif; padding: 20px; text-align: center; border: 1px solid #eee; border-radius: 8px; max-width: 500px; margin: 0 auto;">
+                            <h2 style="color: #A084E8;">Recuperar Acceso</h2>
+                            <p>Hola <strong>${u.name}</strong>,</p>
+                            <p>Haz clic en el botón para crear una nueva contraseña:</p>
+                            <br>
+                            <a href="${resetLink}" style="background-color: #A084E8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Restablecer Contraseña</a>
+                            <br><br>
+                            <p style="font-size: 12px; color: #888;">El enlace expira en 30 minutos.</p>
                         </div>
                     `
                 });
+                console.log("✅ Correo enviado a:", cleanEmail);
                 return { success: true };
-            } catch (error) { throw new Error("Error SMTP"); }
+            } catch (error) { 
+                console.error("💥 Error SMTP:", error);
+                throw new Error("Error al enviar el correo."); 
+            }
         })
-
         .post('/reset-password-confirm', async ({ body }) => {
             const { email, code, newPassword } = body as any;
             const [u] = await sql`SELECT * FROM users WHERE email = ${String(email).toLowerCase().trim()} AND reset_token = ${code} AND reset_expires > NOW()`;
@@ -184,7 +208,6 @@ const app = new Elysia()
             await sql`UPDATE users SET password_hash = ${hashed}, reset_token = NULL, reset_expires = NULL WHERE id = ${u.id}`;
             return { success: true };
         })
-        
         .post('/change-password', async ({ body, user, set }) => {
             if (!user) return { error: "No autorizado" };
             const { currentPassword, newPassword } = body as any;
@@ -196,10 +219,12 @@ const app = new Elysia()
             await sql`UPDATE users SET password_hash = ${hashed} WHERE id = ${u.id}`;
             return { success: true };
         })
-        
         .get('/me', ({ user }) => ({ user }))
-        .post('/logout', ({ cookie }) => { cookie.auth_token.remove(); return { success: true }; })
+        .post('/logout', ({ cookie }) => { 
+            cookie.auth_token.remove({ path: '/', sameSite: 'none', secure: true }); 
+            return { success: true }; 
+        })
     )
     .listen(process.env.PORT || 3000);
 
-console.log(`🚀 Servidor listo en http://localhost:${process.env.PORT || 3000}`);
+console.log(`🚀 Servidor activo en puerto ${process.env.PORT || 3000}`);
