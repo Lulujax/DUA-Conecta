@@ -8,12 +8,11 @@ import nodemailer from 'nodemailer'
 // --- CLAVE PEXELS INTEGRADA ---
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY || "FkomuRcVuCwLLqNyPJb66W4ed38f0PsWvr3DXIdwB5Mr8a5qOC6qa4ai";
 
-// 1. CONEXIÓN DB
+// 1. CONEXIÓN DB (Supabase)
 const sql = postgres(process.env.DATABASE_URL!, { ssl: { rejectUnauthorized: false }, prepare: false });
 
-// 2. CONFIGURACIÓN CORREO (MODO AUTOMÁTICO 'SERVICE')
-// Esta configuración le dice a Nodemailer que use los presets internos de Google
-// evitando problemas manuales de puertos o certificados.
+// 2. CONFIGURACIÓN CORREO (MODO AUTOMÁTICO GMAIL)
+// Usamos 'service: gmail' para que Nodemailer maneje los puertos internamente.
 const transporter = nodemailer.createTransport({
     service: 'gmail', 
     auth: { 
@@ -47,8 +46,8 @@ const app = new Elysia()
         if (msg.includes('no encontrado')) { set.status = 404; return { error: "Usuario no encontrado." }; }
         return { error: msg };
     })
-    // CORS PARA VERCEL
-   .use(cors({ 
+    // CORS: Permite conexión desde Vercel
+    .use(cors({ 
         origin: true, 
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
         allowedHeaders: ['Content-Type', 'Authorization'], 
@@ -61,7 +60,7 @@ const app = new Elysia()
         try { const p = await jwt.verify(token); return { user: p || null }; } catch { return { user: null }; }
     })
 
-    // --- PEXELS ---
+    // --- PEXELS (Imágenes) ---
     .group('/api/external', app => app
         .get('/images', async ({ query, set }) => {
             const q = query.q ? String(query.q) : 'school';
@@ -136,13 +135,14 @@ const app = new Elysia()
             const [u] = await sql`SELECT * FROM users WHERE email = ${String(email).toLowerCase().trim()}`;
             if (!u || !(await bcrypt.compare(String(password).trim(), u.password_hash))) { set.status = 401; return { error: 'Credenciales inválidas' }; }
             
+            // COOKIE BLINDADA PARA PRODUCCIÓN (Crucial para Vercel <-> Render)
             cookie.auth_token.set({ 
                 value: await jwt.sign({ userId: u.id, name: u.name, email: u.email }), 
                 httpOnly: true, 
                 path: '/',
-                secure: true,      // HTTPS Production
-                sameSite: 'none',  // Cross-Site Vercel/Render
-                maxAge: 60 * 60 * 24 * 7 
+                secure: true,      // Obligatorio en HTTPS
+                sameSite: 'none',  // Obligatorio Cross-Site
+                maxAge: 60 * 60 * 24 * 7 // 7 días
             });
             
             return { success: true, user: { name: u.name, email: u.email } };
@@ -155,8 +155,8 @@ const app = new Elysia()
                 return { success: true };
             } catch (e) { set.status = 400; return { error: "Registrado" }; }
         })
-        .post('/forgot-password', async ({ body }) => {
-            console.log("📨 Recuperando contraseña...");
+        .post('/forgot-password', async ({ body, set }) => {
+            console.log("📨 Intentando recuperar contraseña...");
             const { email } = body as any;
             const cleanEmail = String(email).toLowerCase().trim();
             const [u] = await sql`SELECT id, name FROM users WHERE email = ${cleanEmail}`;
@@ -168,24 +168,39 @@ const app = new Elysia()
             const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
             const resetLink = `${baseUrl}/reset-password?token=${token}&email=${cleanEmail}`;
 
+            // --- TIMEOUT DE SEGURIDAD (8 Segundos) ---
+            // Esto evita que el botón gire infinito si Render bloquea el correo
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error("Timeout: Render tardó mucho en responder")), 8000)
+            );
+
+            const sendPromise = transporter.sendMail({
+                from: '"Soporte DUA-Conecta" <no-reply@duaconecta.com>',
+                to: cleanEmail,
+                subject: '🔒 Restablecer contraseña',
+                html: `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; text-align: center; border: 1px solid #eee; border-radius: 8px; max-width: 500px; margin: 0 auto;">
+                        <h2 style="color: #A084E8;">Recuperar Acceso</h2>
+                        <p>Hola <strong>${u.name}</strong>,</p>
+                        <p>Haz clic abajo para crear tu nueva contraseña:</p>
+                        <br>
+                        <a href="${resetLink}" style="background-color: #A084E8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Restablecer Contraseña</a>
+                        <br><br>
+                        <p style="font-size: 12px; color: #888;">El enlace expira en 30 minutos.</p>
+                    </div>
+                `
+            });
+
             try {
-                await transporter.sendMail({
-                    from: '"Soporte DUA-Conecta" <no-reply@duaconecta.com>',
-                    to: cleanEmail,
-                    subject: '🔒 Restablecer contraseña',
-                    html: `
-                        <div style="font-family: Arial, sans-serif; padding: 20px; text-align: center; border: 1px solid #eee; border-radius: 8px;">
-                            <h2 style="color: #A084E8;">Recuperar Acceso</h2>
-                            <p>Hola <strong>${u.name}</strong>,</p>
-                            <a href="${resetLink}" style="background-color: #A084E8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Restablecer Contraseña</a>
-                        </div>
-                    `
-                });
-                console.log("✅ Enviado a:", cleanEmail);
+                // Carrera: Si el correo no sale en 8 segundos, cancelamos.
+                await Promise.race([sendPromise, timeoutPromise]);
+                console.log("✅ Correo enviado con éxito a:", cleanEmail);
                 return { success: true };
             } catch (error: any) { 
                 console.error("💥 Error SMTP:", error);
-                throw new Error("Error conectando con Gmail."); 
+                // Devolvemos error 504 para que el Frontend sepa que falló la conexión
+                set.status = 504; 
+                return { error: "El servidor de correo no responde. Intenta más tarde." };
             }
         })
         .post('/reset-password-confirm', async ({ body }) => {
