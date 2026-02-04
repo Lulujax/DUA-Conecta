@@ -8,21 +8,26 @@ import nodemailer from 'nodemailer'
 // --- CLAVE PEXELS INTEGRADA ---
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY || "FkomuRcVuCwLLqNyPJb66W4ed38f0PsWvr3DXIdwB5Mr8a5qOC6qa4ai";
 
-// 1. CONEXIÓN DB (Robusta)
+// 1. CONEXIÓN DB
 const sql = postgres(process.env.DATABASE_URL!, { ssl: { rejectUnauthorized: false }, prepare: false });
 
-// 2. CONFIGURACIÓN CORREO (MODO SEGURO SSL PARA RENDER)
+// 2. CONFIGURACIÓN CORREO (MODO COMPATIBILIDAD 587 + TIMEOUTS)
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: 465, // Puerto SSL Directo (Arregla el bloqueo en Render)
-    secure: true, // Obligatorio para puerto 465
+    port: 587, // Puerto estándar TLS
+    secure: false, // False para 587
     auth: { 
         user: process.env.SMTP_USER, 
         pass: process.env.SMTP_PASS 
     },
     tls: {
-        rejectUnauthorized: false // Permite certificados compartidos de Render
-    }
+        rejectUnauthorized: false, // Permite certificados compartidos
+        ciphers: 'SSLv3' // Mayor compatibilidad
+    },
+    // EVITA QUE SE CUELGUE (Timeouts de 10 segundos)
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000
 });
 
 // 3. MIGRACIÓN AUTOMÁTICA
@@ -32,7 +37,6 @@ const transporter = nodemailer.createTransport({
         await sql`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW(), reset_token TEXT, reset_expires TIMESTAMP)`;
         await sql`CREATE TABLE IF NOT EXISTS templates (id SERIAL PRIMARY KEY, name TEXT NOT NULL, category TEXT, thumbnail_url TEXT, description TEXT, base_elements JSONB DEFAULT '[]', created_at TIMESTAMP DEFAULT NOW())`;
         await sql`CREATE TABLE IF NOT EXISTS activities (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW(), template_id INTEGER, elements JSONB DEFAULT '[]', preview_img TEXT, updated_at TIMESTAMP DEFAULT NOW())`;
-        // Asegurar columnas
         await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS template_id INTEGER`;
         await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS elements JSONB DEFAULT '[]'`;
         await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS preview_img TEXT`;
@@ -46,7 +50,6 @@ const transporter = nodemailer.createTransport({
 const app = new Elysia()
     .onError(({ code, error, set }) => {
         const msg = error.toString();
-        // Errores conocidos
         if (msg.includes('misma')) { set.status = 400; return { error: "⚠️ La nueva contraseña es igual a la actual." }; }
         if (msg.includes('inválido') || msg.includes('expirado')) { set.status = 401; return { error: "El enlace es inválido o ha expirado." }; }
         if (msg.includes('no encontrado')) { set.status = 404; return { error: "Usuario no encontrado." }; }
@@ -54,10 +57,10 @@ const app = new Elysia()
     })
     // CORS PARA VERCEL
    .use(cors({ 
-        origin: true, // Acepta peticiones de tu Vercel
+        origin: true, 
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
         allowedHeaders: ['Content-Type', 'Authorization'], 
-        credentials: true // Importante para las cookies
+        credentials: true 
     }))
     .use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET || 'secret' }))
     .derive(async ({ jwt, cookie }) => {
@@ -66,7 +69,7 @@ const app = new Elysia()
         try { const p = await jwt.verify(token); return { user: p || null }; } catch { return { user: null }; }
     })
 
-    // --- RUTA PEXELS ---
+    // --- PEXELS ---
     .group('/api/external', app => app
         .get('/images', async ({ query, set }) => {
             const q = query.q ? String(query.q) : 'school';
@@ -141,14 +144,13 @@ const app = new Elysia()
             const [u] = await sql`SELECT * FROM users WHERE email = ${String(email).toLowerCase().trim()}`;
             if (!u || !(await bcrypt.compare(String(password).trim(), u.password_hash))) { set.status = 401; return { error: 'Credenciales inválidas' }; }
             
-            // COOKIE BLINDADA PARA PRODUCCIÓN (Vercel <-> Render)
             cookie.auth_token.set({ 
                 value: await jwt.sign({ userId: u.id, name: u.name, email: u.email }), 
                 httpOnly: true, 
                 path: '/',
-                secure: true,      // Obligatorio en HTTPS
-                sameSite: 'none',  // Obligatorio Cross-Site
-                maxAge: 60 * 60 * 24 * 7 // 7 días
+                secure: true,      // HTTPS Production
+                sameSite: 'none',  // Cross-Site Vercel/Render
+                maxAge: 60 * 60 * 24 * 7 
             });
             
             return { success: true, user: { name: u.name, email: u.email } };
@@ -162,7 +164,7 @@ const app = new Elysia()
             } catch (e) { set.status = 400; return { error: "Registrado" }; }
         })
         .post('/forgot-password', async ({ body }) => {
-            console.log("📨 Intentando enviar correo...");
+            console.log("📨 Intentando recuperar contraseña...");
             const { email } = body as any;
             const cleanEmail = String(email).toLowerCase().trim();
             const [u] = await sql`SELECT id, name FROM users WHERE email = ${cleanEmail}`;
@@ -171,7 +173,6 @@ const app = new Elysia()
             const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
             await sql`UPDATE users SET reset_token = ${token}, reset_expires = NOW() + INTERVAL '30 minutes' WHERE id = ${u.id}`;
             
-            // URL dinámica: Si FRONTEND_URL no está, usa localhost
             const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
             const resetLink = `${baseUrl}/reset-password?token=${token}&email=${cleanEmail}`;
 
@@ -181,22 +182,18 @@ const app = new Elysia()
                     to: cleanEmail,
                     subject: '🔒 Restablecer contraseña',
                     html: `
-                        <div style="font-family: Arial, sans-serif; padding: 20px; text-align: center; border: 1px solid #eee; border-radius: 8px; max-width: 500px; margin: 0 auto;">
+                        <div style="font-family: Arial, sans-serif; padding: 20px; text-align: center; border: 1px solid #eee; border-radius: 8px;">
                             <h2 style="color: #A084E8;">Recuperar Acceso</h2>
                             <p>Hola <strong>${u.name}</strong>,</p>
-                            <p>Haz clic en el botón para crear una nueva contraseña:</p>
-                            <br>
                             <a href="${resetLink}" style="background-color: #A084E8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Restablecer Contraseña</a>
-                            <br><br>
-                            <p style="font-size: 12px; color: #888;">El enlace expira en 30 minutos.</p>
                         </div>
                     `
                 });
                 console.log("✅ Correo enviado a:", cleanEmail);
                 return { success: true };
-            } catch (error) { 
-                console.error("💥 Error SMTP:", error);
-                throw new Error("Error al enviar el correo."); 
+            } catch (error: any) { 
+                console.error("💥 Error SMTP:", error.code, error.message);
+                throw new Error("Error de conexión con Gmail."); 
             }
         })
         .post('/reset-password-confirm', async ({ body }) => {
