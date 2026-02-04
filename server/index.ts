@@ -11,23 +11,15 @@ const PEXELS_API_KEY = process.env.PEXELS_API_KEY || "FkomuRcVuCwLLqNyPJb66W4ed3
 // 1. CONEXIÓN DB
 const sql = postgres(process.env.DATABASE_URL!, { ssl: { rejectUnauthorized: false }, prepare: false });
 
-// 2. CONFIGURACIÓN CORREO (MODO COMPATIBILIDAD 587 + TIMEOUTS)
+// 2. CONFIGURACIÓN CORREO (MODO AUTOMÁTICO 'SERVICE')
+// Esta configuración le dice a Nodemailer que use los presets internos de Google
+// evitando problemas manuales de puertos o certificados.
 const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: 587, // Puerto estándar TLS
-    secure: false, // False para 587
+    service: 'gmail', 
     auth: { 
         user: process.env.SMTP_USER, 
         pass: process.env.SMTP_PASS 
-    },
-    tls: {
-        rejectUnauthorized: false, // Permite certificados compartidos
-        ciphers: 'SSLv3' // Mayor compatibilidad
-    },
-    // EVITA QUE SE CUELGUE (Timeouts de 10 segundos)
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000
+    }
 });
 
 // 3. MIGRACIÓN AUTOMÁTICA
@@ -164,7 +156,7 @@ const app = new Elysia()
             } catch (e) { set.status = 400; return { error: "Registrado" }; }
         })
         .post('/forgot-password', async ({ body }) => {
-            console.log("📨 Intentando recuperar contraseña...");
+            console.log("📨 Recuperando contraseña...");
             const { email } = body as any;
             const cleanEmail = String(email).toLowerCase().trim();
             const [u] = await sql`SELECT id, name FROM users WHERE email = ${cleanEmail}`;
@@ -189,11 +181,11 @@ const app = new Elysia()
                         </div>
                     `
                 });
-                console.log("✅ Correo enviado a:", cleanEmail);
+                console.log("✅ Enviado a:", cleanEmail);
                 return { success: true };
             } catch (error: any) { 
-                console.error("💥 Error SMTP:", error.code, error.message);
-                throw new Error("Error de conexión con Gmail."); 
+                console.error("💥 Error SMTP:", error);
+                throw new Error("Error conectando con Gmail."); 
             }
         })
         .post('/reset-password-confirm', async ({ body }) => {
