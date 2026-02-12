@@ -1,5 +1,5 @@
 <script lang="ts">
-    let { password = $bindable(), isValid = $bindable() } = $props<{ 
+    let { password = '', isValid = $bindable() } = $props<{ 
         password: string, 
         isValid: boolean 
     }>();
@@ -34,16 +34,8 @@
 </script>
 
 <div class="password-strength-container">
-    <div class="input-wrapper">
-        <input 
-            type="password" 
-            bind:value={password} 
-            placeholder="Contraseña segura"
-            class="pass-input"
-        />
-        <div class="strength-bar-bg">
-            <div class="strength-bar-fill" style="background-color: {barColor}; width: {(strength / 4) * 100}%"></div>
-        </div>
+    <div class="strength-bar-bg">
+        <div class="strength-bar-fill" style="background-color: {barColor}; width: {(strength / 4) * 100}%"></div>
     </div>
 
     <div class="status-row">
@@ -52,43 +44,32 @@
 
     <div class="requirements-list">
         <div class="req-item" class:met={hasMinLength}>
-            <span class="dot" style="background-color: {hasMinLength ? '#16a34a' : 'var(--border-color)'}"></span> Mín. 8 caracteres
+            <span class="dot" style="background-color: {hasMinLength ? '#16a34a' : 'var(--border-color)'}"></span> Mín. 8
         </div>
         <div class="req-item" class:met={hasNumber}>
-            <span class="dot" style="background-color: {hasNumber ? '#16a34a' : 'var(--border-color)'}"></span> Un número
+            <span class="dot" style="background-color: {hasNumber ? '#16a34a' : 'var(--border-color)'}"></span> Número
         </div>
         <div class="req-item" class:met={hasUpper}>
-            <span class="dot" style="background-color: {hasUpper ? '#16a34a' : 'var(--border-color)'}"></span> Una mayúscula
+            <span class="dot" style="background-color: {hasUpper ? '#16a34a' : 'var(--border-color)'}"></span> Mayúscula
         </div>
         <div class="req-item" class:met={hasSpecial}>
-            <span class="dot" style="background-color: {hasSpecial ? '#16a34a' : 'var(--border-color)'}"></span> Un símbolo
+            <span class="dot" style="background-color: {hasSpecial ? '#16a34a' : 'var(--border-color)'}"></span> Símbolo
         </div>
     </div>
 </div>
 
 <style>
-    .password-strength-container { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+    .password-strength-container { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; margin-top: 5px; }
     
-    /* Wrapper del input: Fondo adaptativo */
-    .input-wrapper { position: relative; overflow: hidden; border-radius: 10px; background-color: var(--bg-section); border: 1px solid var(--border-color); transition: all 0.2s; }
-    .input-wrapper:focus-within { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(160, 132, 232, 0.2); background-color: var(--bg-card); }
+    .strength-bar-bg { width: 100%; height: 4px; background: var(--border-color); border-radius: 2px; overflow: hidden; }
+    .strength-bar-fill { height: 100%; transition: all 0.4s ease; }
     
-    /* Input transparente para heredar color */
-    .pass-input { width: 100%; padding: 12px 16px; border: none; outline: none; background: transparent; font-size: 1rem; color: var(--text-dark); position: relative; z-index: 2; box-sizing: border-box; }
-    .pass-input::placeholder { color: var(--text-light); opacity: 0.7; }
-
-    /* Barra */
-    .strength-bar-bg { position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: var(--border-color); z-index: 1; }
-    .strength-bar-fill { height: 100%; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+    .status-row { display: flex; justify-content: flex-end; }
+    .status-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
     
-    .status-row { display: flex; justify-content: flex-end; margin-top: -4px; }
-    .status-label { font-size: 0.8rem; font-weight: 700; transition: color 0.3s; text-transform: uppercase; letter-spacing: 0.5px; }
+    .requirements-list { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .req-item { font-size: 0.75rem; color: var(--text-light); display: flex; align-items: center; gap: 6px; }
+    .req-item.met { color: var(--text-dark); font-weight: 600; } 
     
-    /* Lista de requisitos: Fondo adaptativo */
-    .requirements-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background-color: var(--bg-section); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); }
-    
-    .req-item { font-size: 0.8rem; color: var(--text-light); display: flex; align-items: center; gap: 8px; transition: all 0.3s; font-weight: 500; }
-    .req-item.met { color: var(--text-dark); } 
-    
-    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; transition: background-color 0.3s; border: 1px solid transparent; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; border: 1px solid transparent; background-color: #ddd; }
 </style>
