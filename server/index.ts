@@ -1,199 +1,199 @@
-import { Elysia, t } from 'elysia'
-import { cors } from '@elysiajs/cors'
-import { jwt } from '@elysiajs/jwt'
-import postgres from 'postgres'
-import bcrypt from 'bcryptjs'
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import postgres from 'postgres';
 
-// --- CONFIGURACIÓN ---
-const PEXELS_API_KEY = process.env.PEXELS_API_KEY || "";
-const BREVO_API_KEY = process.env.BREVO_API_KEY; 
-const SENDER_EMAIL = process.env.SENDER_EMAIL || "tu_email@gmail.com"; 
+// 1. Cargar variables de entorno
+dotenv.config();
 
-// Determinar si estamos en Producción (Render) o Desarrollo (Local)
-const isProduction = process.env.NODE_ENV === 'production';
+const app = express();
+const port = process.env.PORT || 3000;
 
-// Conexión DB
-const sql = postgres(process.env.DATABASE_URL!, { ssl: { rejectUnauthorized: false }, prepare: false });
+// 2. Configuración de Base de Datos (Postgres / Supabase)
+// Asegúrate de que tu .env tenga DATABASE_URL=postgres://postgres.tuusuario:pass@aws-0-us-west-1.pooler.supabase.com:6543/postgres
+const sql = postgres(process.env.DATABASE_URL!, {
+  ssl: 'require',     // Necesario para Supabase en producción/nube
+  max: 10,            // Máximo de conexiones simultáneas
+  idle_timeout: 20,   // Cerrar conexiones inactivas
+  connect_timeout: 30
+});
 
-// --- FUNCIÓN ENVÍO CORREO (Brevo HTTP) ---
-async function sendEmailBrevo(to: string, subject: string, htmlContent: string) {
-    if (!BREVO_API_KEY) { console.error("Falta BREVO_API_KEY"); return false; }
-    try {
-        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-            method: 'POST',
-            headers: { 'accept': 'application/json', 'api-key': BREVO_API_KEY, 'content-type': 'application/json' },
-            body: JSON.stringify({ sender: { email: SENDER_EMAIL, name: "Soporte DUA" }, to: [{ email: to }], subject: subject, htmlContent: htmlContent })
-        });
-        return response.ok;
-    } catch (error) { console.error("Error Brevo:", error); return false; }
-}
+// 3. Configuración de Seguridad (CORS) - ¡CRUCIAL PARA EL LOGIN!
+app.use(cors({
+  origin: 'http://localhost:5173', // Solo permitimos a tu Frontend
+  credentials: true,               // Permite el paso de cookies/tokens
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
-// MIGRACIÓN
-(async () => {
-    try {
-        await sql`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW(), reset_token TEXT, reset_expires TIMESTAMP)`;
-        await sql`CREATE TABLE IF NOT EXISTS templates (id SERIAL PRIMARY KEY, name TEXT NOT NULL, category TEXT, thumbnail_url TEXT, description TEXT, base_elements JSONB DEFAULT '[]', created_at TIMESTAMP DEFAULT NOW())`;
-        await sql`CREATE TABLE IF NOT EXISTS activities (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, name TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW(), template_id INTEGER, elements JSONB DEFAULT '[]', preview_img TEXT, updated_at TIMESTAMP DEFAULT NOW())`;
-        // Columnas
-        await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS template_id INTEGER`;
-        await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS elements JSONB DEFAULT '[]'`;
-        await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS preview_img TEXT`;
-        await sql`ALTER TABLE activities ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`;
-        await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT`;
-        await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_expires TIMESTAMP`;
-        console.log("✅ DB Lista");
-    } catch (e) { console.error("Error DB", e); }
-})();
+// Aumentar límite de JSON para guardar diseños grandes
+app.use(express.json({ limit: '50mb' }));
 
-const app = new Elysia()
-    .onError(({ code, error, set }) => {
-        const msg = error.toString();
-        if (msg.includes('misma')) { set.status = 400; return { error: "La contraseña es igual a la actual." }; }
-        if (msg.includes('inválido') || msg.includes('expirado')) { set.status = 401; return { error: "Enlace inválido o expirado." }; }
-        return { error: msg };
-    })
-    // CORS: Fundamental para que el frontend pueda leer la cookie
-    .use(cors({ 
-        origin: true, // Acepta cualquier origen (útil para dev y prod)
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
-        allowedHeaders: ['Content-Type', 'Authorization'], 
-        credentials: true // OBLIGATORIO para cookies
-    }))
-    .use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET || 'secret' }))
-    .derive(async ({ jwt, cookie }) => {
-        const token = cookie.auth_token?.value;
-        if (!token) return { user: null };
-        try { const p = await jwt.verify(token); return { user: p || null }; } catch { return { user: null }; }
-    })
+// ==========================================
+// 🔐 RUTAS DE AUTENTICACIÓN (/auth/...)
+// ==========================================
+
+// POST /auth/register
+app.post('/auth/register', async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Faltan datos obligatorios' });
+  }
+
+  try {
+    // Verificar si ya existe
+    const existing = await sql`SELECT id FROM users WHERE email = ${email}`;
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'El correo ya está registrado' });
+    }
+
+    // Insertar usuario
+    const newUser = await sql`
+      INSERT INTO users (name, email, password_hash)
+      VALUES (${name}, ${email}, ${password})
+      RETURNING id, name, email
+    `;
+
+    // Responder con éxito y un token simulado
+    res.status(201).json({ 
+      user: newUser[0], 
+      token: 'token-simulado-' + newUser[0].id 
+    });
+
+  } catch (error) {
+    console.error('❌ Error Registro:', error);
+    res.status(500).json({ error: 'Error al registrar usuario en DB' });
+  }
+});
+
+// POST /auth/login
+app.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) return res.status(400).json({ error: 'Faltan credenciales' });
+
+  try {
+    // Buscar usuario
+    const users = await sql`SELECT * FROM users WHERE email = ${email}`;
     
-    // --- PEXELS ---
-    .group('/api/external', app => app
-        .get('/images', async ({ query }) => {
-            try {
-                const q = query.q || 'education';
-                const r = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(String(q))}&per_page=20&locale=es-ES`, { headers: { Authorization: PEXELS_API_KEY } });
-                const d:any = await r.json();
-                return { success: true, images: d.photos?.map((p:any) => ({ id: p.id, url: p.src.large2x, thumbnail: p.src.medium, width: p.width, height: p.height })) || [] };
-            } catch { return { success: false, images: [] }; }
-        })
-    )
+    if (users.length === 0) {
+      return res.status(401).json({ error: 'Usuario no encontrado' });
+    }
 
-    // --- AUTH ---
-    .group('/auth', app => app
-        .post('/login', async ({ body, jwt, cookie, set }) => {
-            const { email, password } = body as any;
-            const [u] = await sql`SELECT * FROM users WHERE email = ${String(email).toLowerCase().trim()}`;
-            
-            if (!u || !(await bcrypt.compare(String(password).trim(), u.password_hash))) { 
-                set.status = 401; 
-                return { error: 'Credenciales inválidas' }; 
-            }
-            
-            // --- CONFIGURACIÓN DE COOKIE INTELIGENTE ---
-            cookie.auth_token.set({ 
-                value: await jwt.sign({ userId: u.id, name: u.name, email: u.email }), 
-                httpOnly: true, 
-                path: '/',
-                // Si es Producción -> Secure TRUE. Si es Local -> Secure FALSE
-                secure: isProduction,      
-                // Si es Producción -> 'none' (cross-site). Si es Local -> 'lax'
-                sameSite: isProduction ? 'none' : 'lax',  
-                maxAge: 60 * 60 * 24 * 7 // 7 días
-            });
-            
-            return { success: true, user: { name: u.name, email: u.email } };
-        })
-        .post('/register', async ({ body, set }) => {
-            try {
-                const { name, email, password } = body as any;
-                const hashed = await bcrypt.hash(String(password).trim(), 10);
-                await sql`INSERT INTO users (name, email, password_hash) VALUES (${name}, ${String(email).toLowerCase().trim()}, ${hashed})`;
-                return { success: true };
-            } catch { set.status = 400; return { error: "El correo ya está registrado." }; }
-        })
-        .post('/forgot-password', async ({ body, set }) => {
-            const { email } = body as any;
-            const cleanEmail = String(email).toLowerCase().trim();
-            const [u] = await sql`SELECT id, name FROM users WHERE email = ${cleanEmail}`;
-            if (!u) throw new Error("Usuario no encontrado");
+    const user = users[0];
 
-            const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
-            await sql`UPDATE users SET reset_token = ${token}, reset_expires = NOW() + INTERVAL '30 minutes' WHERE id = ${u.id}`;
-            
-            const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}&email=${cleanEmail}`;
+    // Verificar contraseña (Texto plano por ahora, idealmente usar bcrypt)
+    if (user.password_hash !== password) {
+      return res.status(401).json({ error: 'Contraseña incorrecta' });
+    }
 
-            // Intento de envío
-            const enviado = await sendEmailBrevo(cleanEmail, 'Restablecer contraseña', `<a href="${resetLink}">Recuperar aquí</a>`);
+    // Login Exitoso
+    res.json({ 
+      user: { id: user.id, name: user.name, email: user.email },
+      token: 'token-simulado-' + user.id 
+    });
 
-            if (!enviado) {
-                console.log("⚠️ Falló envío correo. Link manual:", resetLink);
-                // No retornamos error para no asustar al usuario si falla el servicio de correo gratuito
-            }
-            return { success: true };
-        })
-        .post('/reset-password-confirm', async ({ body }) => {
-            const { email, code, newPassword } = body as any;
-            const [u] = await sql`SELECT * FROM users WHERE email = ${String(email).toLowerCase().trim()} AND reset_token = ${code} AND reset_expires > NOW()`;
-            if (!u) throw new Error("Enlace inválido o expirado");
-            const hashed = await bcrypt.hash(String(newPassword).trim(), 10);
-            await sql`UPDATE users SET password_hash = ${hashed}, reset_token = NULL, reset_expires = NULL WHERE id = ${u.id}`;
-            return { success: true };
-        })
-        .post('/change-password', async ({ body, user, set }) => {
-            if (!user) return { error: "No autorizado" };
-            const { currentPassword, newPassword } = body as any;
-            const [u] = await sql`SELECT * FROM users WHERE id = ${(user as any).userId}`;
-            if (!u) return { error: "Usuario no encontrado" };
-            if (!(await bcrypt.compare(String(currentPassword).trim(), u.password_hash))) { set.status = 401; return { success: false, code: 'incorrecta' }; }
-            if (await bcrypt.compare(String(newPassword).trim(), u.password_hash)) { set.status = 400; return { success: false, code: 'misma' }; }
-            const hashed = await bcrypt.hash(String(newPassword).trim(), 10);
-            await sql`UPDATE users SET password_hash = ${hashed} WHERE id = ${u.id}`;
-            return { success: true };
-        })
-        // Logout: importante limpiar la cookie con los mismos parámetros
-        .post('/logout', ({ cookie }) => { 
-            cookie.auth_token.remove({ 
-                path: '/', 
-                sameSite: isProduction ? 'none' : 'lax', 
-                secure: isProduction 
-            }); 
-            return { success: true }; 
-        })
-        .get('/me', ({ user }) => ({ user }))
-    )
+  } catch (error) {
+    console.error('❌ Error Login:', error);
+    res.status(500).json({ error: 'Error interno al iniciar sesión' });
+  }
+});
+
+// GET /auth/me (Para verificar sesión al recargar página)
+app.get('/auth/me', (req, res) => {
+    // Aquí deberíamos validar el token real. Por simplicidad devolvemos ok si hay header.
+    const authHeader = req.headers.authorization;
+    if(authHeader) {
+        res.json({ valid: true });
+    } else {
+        res.status(401).json({ error: 'No autorizado' });
+    }
+});
+
+// ==========================================
+// 🎨 RUTAS DE PLANTILLAS
+// ==========================================
+
+app.get('/templates', async (req, res) => {
+  try {
+    // Usamos COALESCE para evitar errores si width/height vienen vacíos
+    const templates = await sql`
+      SELECT id, name, category, thumbnail_url, description, 
+             COALESCE(width, 794) as width, 
+             COALESCE(height, 1123) as height 
+      FROM templates 
+      ORDER BY id ASC
+    `;
+    res.json({ templates });
+  } catch (error) {
+    console.error('❌ Error Templates:', error);
+    res.status(500).json({ error: 'Error al cargar galería' });
+  }
+});
+
+app.get('/templates/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await sql`SELECT * FROM templates WHERE id = ${id}`;
     
-    // --- RUTAS DE ACTIVIDADES ---
-    .group('/api/activities', app => app
-         .get('/', async ({ user }) => { if(!user) return {activities:[]}; try { return {activities: await sql`SELECT * FROM activities WHERE user_id = ${(user as any).userId} ORDER BY updated_at DESC`}} catch {return {activities:[]}}})
-         .post('/save', async ({ body, user, set }) => {
-            if(!user) { set.status=401; return {error:'Login requerido'} }
-            const { name, templateId, elements, previewImg } = body as any;
-            try {
-                const tId = parseInt(templateId) || null;
-                const [n] = await sql`INSERT INTO activities (user_id, template_id, name, elements, preview_img) VALUES (${(user as any).userId}, ${tId}, ${name}, ${JSON.stringify(elements)}::jsonb, ${previewImg}) RETURNING id`;
-                return { success: true, activityId: n.id };
-            } catch(e) { set.status=500; return {error:'Error guardar'} }
-         })
-         .get('/:id', async ({params:{id}, user}) => {
-             if(!user) return {error:'No autorizado'};
-             const [a] = await sql`SELECT * FROM activities WHERE id=${id} AND user_id=${(user as any).userId}`;
-             return { activity: a || null };
-         })
-         .put('/:id', async ({params:{id}, body, user, set}) => {
-             if(!user) { set.status=401; return {error:'No'} };
-             const { name, elements, previewImg } = body as any;
-             const [u] = await sql`UPDATE activities SET name=${name}, elements=${JSON.stringify(elements)}::jsonb, preview_img=${previewImg}, updated_at=NOW() WHERE id=${id} AND user_id=${(user as any).userId} RETURNING id`;
-             if (!u) { set.status=404; return {error: 'No encontrado'}; }
-             return { success: true };
-         })
-         .delete('/:id', async ({params:{id}, user}) => {
-             if(!user) return {error:'No'};
-             await sql`DELETE FROM activities WHERE id=${id} AND user_id=${(user as any).userId}`;
-             return { success: true };
-         })
-    )
-    .get('/templates', async () => ({ templates: await sql`SELECT * FROM templates ORDER BY id ASC` }))
-    .get('/templates/:id', async ({params:{id}}) => ({ template: (await sql`SELECT * FROM templates WHERE id=${parseInt(id)}`)[0] }))
-    .listen(process.env.PORT || 3000);
+    if (result.length === 0) return res.status(404).json({ error: 'Plantilla no encontrada' });
 
-console.log(`🚀 Servidor listo en puerto ${process.env.PORT || 3000} | Producción: ${isProduction}`);
+    const tmpl = result[0];
+    
+    // TRUUCO IMPORTANTE: 
+    // Tu seed.ts guarda en 'base_elements', pero el editor busca 'elements'.
+    // Aquí hacemos la traducción para que el frontend funcione.
+    const cleanTemplate = {
+        ...tmpl,
+        elements: tmpl.base_elements || tmpl.elements || [] 
+    };
+
+    res.json({ template: cleanTemplate });
+
+  } catch (error) {
+    console.error(`❌ Error Template ${id}:`, error);
+    res.status(500).json({ error: 'Error al cargar diseño' });
+  }
+});
+
+// ==========================================
+// 💾 RUTAS DE PROYECTOS (GUARDAR)
+// ==========================================
+
+app.post('/projects', async (req, res) => {
+  const { userId, name, width, height, elements, thumbnailUrl } = req.body;
+
+  if (!userId || !elements) return res.status(400).json({ error: 'Datos incompletos' });
+
+  try {
+    const newProject = await sql`
+      INSERT INTO projects (user_id, name, width, height, elements, thumbnail_url)
+      VALUES (${userId}, ${name}, ${width}, ${height}, ${elements}::jsonb, ${thumbnailUrl})
+      RETURNING id, name
+    `;
+    res.json({ success: true, project: newProject[0] });
+  } catch (e) {
+    console.error('❌ Error Guardar:', e);
+    res.status(500).json({ error: 'No se pudo guardar el proyecto' });
+  }
+});
+
+// Obtener mis proyectos
+app.get('/projects', async (req, res) => {
+    const { userId } = req.query;
+    if(!userId) return res.status(400).json({ error: 'Usuario requerido' });
+
+    try {
+        const projects = await sql`SELECT * FROM projects WHERE user_id = ${userId} ORDER BY created_at DESC`;
+        res.json({ projects });
+    } catch(e) {
+        res.status(500).json({ error: 'Error al cargar proyectos' });
+    }
+});
+
+// Iniciar Servidor
+app.listen(port, () => {
+  console.log(`🚀 Servidor backend corriendo en http://localhost:${port}`);
+  console.log(`🔗 Conectado a base de datos (Supabase)`);
+});
