@@ -96,7 +96,7 @@
                          id="confirm" 
                          bind:value={confirmPassword} 
                          placeholder="Repite la contraseña" 
-                         autocomplete="new-password"
+                         autocomplete="off"
                          required 
                          class="themed-input has-icon" 
                      />
