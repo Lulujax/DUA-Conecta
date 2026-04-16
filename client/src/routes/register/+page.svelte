@@ -32,6 +32,10 @@
         try {
             const res = await api.post('/auth/register', { name, email, password });
             if (!res.success || !res.user || !res.token) {
+                // 409: duplicate email – give an actionable message
+                if (res._status === 409) {
+                    throw new Error('Este correo ya tiene una cuenta. Inicia sesión o usa otro correo.');
+                }
                 throw new Error(res.error || 'Error al registrarse.');
             }
             user.loginSuccess(res.user, res.token);

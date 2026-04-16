@@ -4,19 +4,25 @@
     import { toast } from '$lib/stores/toast.svelte';
     import { fade, fly } from 'svelte/transition';
 
-    // ESTADO: Empezamos vacío esperando datos del servidor
-    let allTemplates: Array<any> = [];
-    let isLoading = true;
-    let selectedCategory = 'Todas';
-    let searchQuery = '';
+    /** @type {{ data: { allTemplates: Array<any> } }} */
+    let { data } = $props();
+
+    // Pre-populate from SSR if available; client-side onMount fills in if SSR returned empty
+    let allTemplates: Array<any> = $state(data?.allTemplates ?? []);
+    let isLoading = $state(allTemplates.length === 0);
+    let selectedCategory = $state('Todas');
+    let searchQuery = $state('');
 
     // FILTROS: Incluimos 'Inglés'
     const filterCategories = ['Todas', 'Conducta', 'Matemáticas', 'Lectoescritura', 'Inglés'];
 
-    // CARGA DE DATOS REALES
+    // Only fetch client-side if SSR returned no data
     onMount(async () => {
+        if (allTemplates.length > 0) {
+            isLoading = false;
+            return;
+        }
         try {
-            // Petición al backend (que ahora lee de la DB llena por seed.ts)
             const response = await api.get('/templates');
             if (response.templates) {
                 allTemplates = response.templates;
@@ -30,11 +36,11 @@
     });
 
     // LÓGICA DE FILTRADO
-    $: filteredTemplates = allTemplates.filter(t => {
+    let filteredTemplates = $derived(allTemplates.filter(t => {
         const matchesCategory = selectedCategory === 'Todas' || t.category === selectedCategory;
         const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
         return matchesCategory && matchesSearch;
-    });
+    }));
 
     function setFilter(category: string) {
         selectedCategory = category;
