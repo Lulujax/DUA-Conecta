@@ -19,22 +19,19 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const isProduction = process.env.NODE_ENV === 'production';
-if (!process.env.JWT_SECRET && isProduction) {
-  console.error('❌ Error: JWT_SECRET no configurado en producción.');
+if (!process.env.JWT_SECRET) {
+  console.error('❌ Error: JWT_SECRET no configurado.');
   process.exit(1);
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
-if (!process.env.JWT_SECRET) {
-  console.warn('⚠️ JWT_SECRET no configurado. Usa una clave segura en producción.');
-}
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const FRONTEND_PUBLIC_URL = process.env.FRONTEND_PUBLIC_URL || 'http://localhost:5173';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || FRONTEND_PUBLIC_URL;
 const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000;
 
 // 2. Configuración de Base de Datos (Postgres / Supabase)
 const sql = postgres(DATABASE_URL, {
@@ -202,8 +199,8 @@ app.post('/auth/forgot-password', async (req, res) => {
       return res.json(genericResponse);
     }
 
-    const token = crypto.randomBytes(24).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
 
     await sql`DELETE FROM password_resets WHERE email = ${email}`;
     await sql`
@@ -221,7 +218,7 @@ app.post('/auth/forgot-password', async (req, res) => {
         html: `<p>Haz clic en este enlace para restablecer tu contraseña:</p><a href="${resetUrl}">${resetUrl}</a><p>El enlace expira en 1 hora.</p>`
       });
     } else {
-      console.warn('⚠️ RESEND_API_KEY no configurada. Enlace generado:', resetUrl);
+      console.warn('⚠️ RESEND_API_KEY no configurada. Enlace de recuperación generado.');
     }
 
     return res.json(genericResponse);
