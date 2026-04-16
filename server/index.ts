@@ -15,6 +15,9 @@ const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
 const JWT_SECRET = process.env.JWT_SECRET || 'CLAVE_SECRETA_DE_FALLBACK';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const ADDITIONAL_ORIGINS = process.env.ADDITIONAL_ORIGINS
+  ? process.env.ADDITIONAL_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+  : [];
 const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY;
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 const SMTP_HOST = process.env.SMTP_HOST;
@@ -34,8 +37,22 @@ const sql = postgres(DATABASE_URL, {
   connect_timeout: 30
 });
 
+const ALLOWED_ORIGINS = new Set([
+  FRONTEND_URL,
+  'http://localhost:5173',
+  'http://localhost:4173',
+  ...ADDITIONAL_ORIGINS,
+]);
+
 app.use(cors({
-  origin: [FRONTEND_URL, 'http://localhost:5173'],
+  origin: (origin, callback) => {
+    // Allow server-to-server requests with no Origin header
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.has(origin)) return callback(null, true);
+    // Allow any Vercel preview deployment for this project
+    if (/^https:\/\/dua-conecta(-[a-z0-9-]+)?\.vercel\.app$/.test(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin not allowed: ${origin}`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
