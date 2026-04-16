@@ -19,6 +19,12 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
+if (!process.env.JWT_SECRET && isProduction) {
+  console.error('❌ Error: JWT_SECRET no configurado en producción.');
+  process.exit(1);
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 if (!process.env.JWT_SECRET) {
   console.warn('⚠️ JWT_SECRET no configurado. Usa una clave segura en producción.');
@@ -28,6 +34,7 @@ const FRONTEND_PUBLIC_URL = process.env.FRONTEND_PUBLIC_URL || 'http://localhost
 const CORS_ORIGIN = process.env.CORS_ORIGIN || FRONTEND_PUBLIC_URL;
 const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAIL_FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
 // 2. Configuración de Base de Datos (Postgres / Supabase)
 const sql = postgres(DATABASE_URL, {
@@ -208,7 +215,7 @@ app.post('/auth/forgot-password', async (req, res) => {
 
     if (resend) {
       await resend.emails.send({
-        from: 'DUA Conecta <onboarding@resend.dev>',
+        from: `DUA Conecta <${EMAIL_FROM}>`,
         to: [email],
         subject: 'Recuperación de Contraseña DUA-Conecta',
         html: `<p>Haz clic en este enlace para restablecer tu contraseña:</p><a href="${resetUrl}">${resetUrl}</a><p>El enlace expira en 1 hora.</p>`
