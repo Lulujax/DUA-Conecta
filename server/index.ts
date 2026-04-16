@@ -31,7 +31,7 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || FRONTEND_PUBLIC_URL;
 const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev';
-const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000;
+const RESET_TOKEN_EXPIRY_MS = Number(process.env.RESET_TOKEN_EXPIRY_MS) || 60 * 60 * 1000;
 
 // 2. Configuración de Base de Datos (Postgres / Supabase)
 const sql = postgres(DATABASE_URL, {
@@ -217,6 +217,8 @@ app.post('/auth/forgot-password', async (req, res) => {
         subject: 'Recuperación de Contraseña DUA-Conecta',
         html: `<p>Haz clic en este enlace para restablecer tu contraseña:</p><a href="${resetUrl}">${resetUrl}</a><p>El enlace expira en 1 hora.</p>`
       });
+    } else if (process.env.NODE_ENV !== 'production') {
+      console.warn('⚠️ RESEND_API_KEY no configurada. Enlace de recuperación generado:', resetUrl);
     } else {
       console.warn('⚠️ RESEND_API_KEY no configurada. Enlace de recuperación generado.');
     }

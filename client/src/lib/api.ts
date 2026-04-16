@@ -13,7 +13,12 @@ type SendOptions = {
 
 function getStoredToken() {
     if (!browser) return null;
-    return localStorage.getItem(TOKEN_KEY);
+    try {
+        return localStorage.getItem(TOKEN_KEY);
+    } catch (error) {
+        console.warn('No se pudo acceder a localStorage.', error);
+        return null;
+    }
 }
 
 async function send({ method, path, data, token }: SendOptions) {
