@@ -57,15 +57,29 @@ El proyecto utiliza una arquitectura monolítica con **Bun** como gestor de paqu
 
 ### 2\. Configuración del Entorno (`.env`)
 
-Crea un archivo `.env` en la carpeta `server/` con la siguiente estructura:
+Copia los archivos de ejemplo y rellena tus valores:
+
+```bash
+cp server/.env.example server/.env
+cp client/.env.example client/.env
+```
+
+**`server/.env`** (variables mínimas para desarrollo):
 
 ```env
-# Configuración de Base de Datos
 DATABASE_URL="postgres://usuario:contraseña@host:puerto/nombre_db"
-
-# Secreto para la autenticación JWT
 JWT_SECRET="TuSecretoMuyLargoYSeguro"
+# En desarrollo, FRONTEND_URL se puede omitir (usa localhost:5173 por defecto)
 ```
+
+**`client/.env`** (variables mínimas para desarrollo):
+
+```env
+# En desarrollo local, puedes usar localhost o dejarlo sin definir
+VITE_API_URL=http://localhost:3000
+```
+
+> Consulta `server/.env.example` y `client/.env.example` para la lista completa de variables.
 
 ### 3\. Instalación e Inicialización
 
@@ -98,3 +112,39 @@ Ejecuta estos comandos desde la carpeta raíz del proyecto (`dua-conecta/`):
     ```
 
 El frontend estará disponible en `http://localhost:5173/` y el backend en el puerto configurado (ej. `http://localhost:3000`).
+
+-----
+
+## 🚀 Despliegue en Producción (Vercel + Render)
+
+### Backend en Render
+
+1. Crea un nuevo **Web Service** en [Render](https://render.com) apuntando al repo.
+2. Configura:
+   - **Root Directory:** `server`
+   - **Build Command:** `npm install` (o `bun install`)
+   - **Start Command:** `node --experimental-strip-types index.ts` (o `bun run index.ts`)
+3. Añade las siguientes **Environment Variables** en Render:
+
+| Variable | Descripción |
+| :--- | :--- |
+| `DATABASE_URL` | URL de conexión a Supabase/PostgreSQL |
+| `JWT_SECRET` | Secreto largo y aleatorio para JWT |
+| `FRONTEND_URL` | URL pública del frontend en Vercel (ej. `https://tu-app.vercel.app`) |
+| `PIXABAY_API_KEY` | API Key de Pixabay (opcional) |
+| `RESEND_API_KEY` | API Key de Resend para emails (opcional) |
+
+> `FRONTEND_URL` es la clave para que el CORS permita peticiones desde Vercel.
+
+### Frontend en Vercel
+
+1. Importa el proyecto en [Vercel](https://vercel.com) y configura:
+   - **Root Directory:** `client`
+   - **Framework Preset:** SvelteKit
+2. Añade la siguiente **Environment Variable** en Vercel:
+
+| Variable | Valor |
+| :--- | :--- |
+| `VITE_API_URL` | URL pública de tu backend en Render (ej. `https://tu-backend.onrender.com`) |
+
+3. Redespliega el proyecto para que tome la nueva variable.
