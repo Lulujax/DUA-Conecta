@@ -3,7 +3,6 @@
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import Draggable from '../editor/Draggable.svelte';
-	import { user } from '../stores/auth';
 	import { editorStore } from '../editor/editor.store.svelte';
 	import { apiService } from '../editor/apiService';
 	
@@ -49,7 +48,7 @@
 	
 	onMount(() => {
 		editorStore.init(baseElements, initialActivityId, initialActivityName);
-		if (initialActivityId && browser) apiService.loadActivity(initialActivityId, $user?.token);
+		if (initialActivityId && browser) apiService.loadActivity(initialActivityId);
 		
 		handleResize();
 		window.addEventListener('resize', handleResize);
