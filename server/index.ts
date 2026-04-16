@@ -26,8 +26,8 @@ if (!process.env.JWT_SECRET) {
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const FRONTEND_PUBLIC_URL = process.env.FRONTEND_PUBLIC_URL || 'http://localhost:5173';
-const CORS_ORIGIN = process.env.CORS_ORIGIN || FRONTEND_PUBLIC_URL;
+const FRONTEND_URL = process.env.FRONTEND_URL || process.env.FRONTEND_PUBLIC_URL || 'http://localhost:5173';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || FRONTEND_URL;
 const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev';
@@ -213,7 +213,7 @@ app.post('/auth/forgot-password', async (req, res) => {
       VALUES (${email}, ${token}, ${expiresAt})
     `;
 
-    const resetUrl = `${FRONTEND_PUBLIC_URL}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+    const resetUrl = `${FRONTEND_URL}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
 
     if (resend) {
       await resend.emails.send({
