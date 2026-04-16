@@ -11,7 +11,7 @@ import { Resend } from 'resend';
 dotenv.config();
 
 const app = express();
-const port = Number(process.env.PORT) || 3000;
+const port = Number.parseInt(process.env.PORT || '3000', 10);
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -121,7 +121,8 @@ app.post('/auth/register', async (req, res) => {
     return res.status(400).json({ error: 'Faltan datos obligatorios.' });
   }
 
-  if (password.length < 8) {
+  const normalizedPassword = String(password).trim();
+  if (normalizedPassword.length < 8) {
     return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
   }
 
@@ -131,7 +132,7 @@ app.post('/auth/register', async (req, res) => {
       return res.status(409).json({ error: 'El correo ya está registrado.' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(normalizedPassword, 10);
     const newUser = await sql`
       INSERT INTO users (name, email, password_hash)
       VALUES (${name}, ${email}, ${passwordHash})
@@ -191,6 +192,10 @@ app.post('/auth/forgot-password', async (req, res) => {
     return res.status(400).json({ error: 'El correo es requerido.' });
   }
 
+  if (!resend && process.env.NODE_ENV === 'production') {
+    return res.status(500).json({ error: 'Servicio de correo no configurado.' });
+  }
+
   const genericResponse = { success: true, message: 'Si el correo existe, se ha enviado un enlace.' };
 
   try {
@@ -236,7 +241,8 @@ app.post('/auth/reset-password-confirm', async (req, res) => {
     return res.status(400).json({ error: 'Datos incompletos.' });
   }
 
-  if (newPassword.length < 8) {
+  const normalizedPassword = String(newPassword).trim();
+  if (normalizedPassword.length < 8) {
     return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
   }
 
@@ -257,12 +263,12 @@ app.post('/auth/reset-password-confirm', async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado.' });
     }
 
-    const samePassword = await bcrypt.compare(newPassword, users[0].password_hash);
+    const samePassword = await bcrypt.compare(normalizedPassword, users[0].password_hash);
     if (samePassword) {
       return res.status(400).json({ error: 'No uses la misma contraseña anterior.' });
     }
 
-    const newHash = await bcrypt.hash(newPassword, 10);
+    const newHash = await bcrypt.hash(normalizedPassword, 10);
     await sql`UPDATE users SET password_hash = ${newHash} WHERE id = ${users[0].id}`;
     await sql`DELETE FROM password_resets WHERE email = ${email}`;
 

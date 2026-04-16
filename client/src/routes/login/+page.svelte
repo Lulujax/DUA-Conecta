@@ -13,13 +13,12 @@
 		isLoading = true;
 		try {
 			const res = await api.post('/auth/login', { email, password });
-			if (res.success && res.user && res.token) {
-                user.loginSuccess(res.user, res.token);
-                toast.success(`Bienvenido, ${res.user.name}`);
-				goto('/dashboard/plantillas');
-			} else {
-                toast.error(res.error || 'Credenciales incorrectas');
+			if (!res.success || !res.user || !res.token) {
+                throw new Error(res.error || 'Credenciales incorrectas');
             }
+            user.loginSuccess(res.user, res.token);
+            toast.success(`Bienvenido, ${res.user.name}`);
+			goto('/dashboard/plantillas');
 		} catch (err: any) {
             toast.error(err.message || 'Credenciales incorrectas');
 		} finally { isLoading = false; }

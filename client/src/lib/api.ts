@@ -46,10 +46,13 @@ async function send({ method, path, data, token }: SendOptions) {
     try {
         const res = await fetch(`${BASE_URL}${path}`, opts);
         const json = await res.json();
-        return json; // Retorna la respuesta del servidor (success, error, etc.)
+        if (!res.ok) {
+            throw new Error(json?.error || 'Error en la solicitud');
+        }
+        return json;
     } catch (err) {
         console.error("API Error:", err);
-        return { error: "Error de conexión con el servidor" };
+        throw err;
     }
 }
 

@@ -31,13 +31,12 @@
         isLoading = true;
         try {
             const res = await api.post('/auth/register', { name, email, password });
-            if (res.success && res.user && res.token) {
-                user.loginSuccess(res.user, res.token);
-                toast.success('¡Cuenta creada!');
-                goto('/dashboard/plantillas');
-            } else {
-                toast.error(res.error || 'Error al registrarse.');
+            if (!res.success || !res.user || !res.token) {
+                throw new Error(res.error || 'Error al registrarse.');
             }
+            user.loginSuccess(res.user, res.token);
+            toast.success('¡Cuenta creada!');
+            goto('/dashboard/plantillas');
         } catch (err: any) {
             toast.error(err.message || 'Error al registrarse.');
         } finally { isLoading = false; }
