@@ -86,6 +86,16 @@ async function ensureSchema() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
 }
 
 function requireAuth(req: AuthRequest, res: express.Response, next: express.NextFunction) {
@@ -134,6 +144,7 @@ app.post('/auth/register', async (req, res) => {
     );
 
     return res.status(201).json({
+      success: true,
       user,
       token
     });
@@ -171,6 +182,7 @@ app.post('/auth/login', async (req, res) => {
     );
 
     return res.json({
+      success: true,
       user: { id: user.id, name: user.name, email: user.email },
       token
     });
@@ -201,38 +213,91 @@ app.post('/auth/forgot-password', async (req, res) => {
     return res.status(400).json({ error: 'Falta el correo' });
   }
 
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-    return res.status(500).json({ error: 'Servidor de correo no configurado.' });
-  }
-
   try {
     const users = await sql`SELECT id, email FROM users WHERE email = ${email}`;
     if (users.length === 0) {
+      // Don't reveal whether the email exists
       return res.json({ success: true });
     }
 
-    const token = crypto.randomBytes(20).toString('hex');
+    const userId = (users[0] as { id: number }).id;
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 3600000); // 1 hour
 
-    const transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      auth: { user: SMTP_USER, pass: SMTP_PASS }
+    // Remove any existing reset tokens for this user and insert the new one atomically
+    await sql.begin(async (txSql) => {
+      await txSql`DELETE FROM password_resets WHERE user_id = ${userId}`;
+      await txSql`
+        INSERT INTO password_resets (user_id, token, expires_at)
+        VALUES (${userId}, ${token}, ${expiresAt})
+      `;
     });
 
-    const resetURL = `${FRONTEND_URL}/auth/reset-password?token=${token}`;
+    const resetURL = `${FRONTEND_URL}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
 
-    await transporter.sendMail({
-      from: SMTP_USER,
-      to: email,
-      subject: 'Recuperación de contraseña',
-      html: `<p>Haz clic aquí para restablecer tu contraseña:</p><a href="${resetURL}">${resetURL}</a>`
-    });
+    if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: SMTP_HOST,
+          port: SMTP_PORT,
+          secure: SMTP_PORT === 465,
+          auth: { user: SMTP_USER, pass: SMTP_PASS }
+        });
+
+        await transporter.sendMail({
+          from: SMTP_USER,
+          to: email,
+          subject: 'Recuperación de contraseña - DUA Conecta',
+          html: `<p>Haz clic aquí para restablecer tu contraseña:</p><a href="${resetURL}">${resetURL}</a><p>Este enlace expira en 1 hora.</p>`
+        });
+      } catch (emailError) {
+        console.error('❌ Error enviando email:', emailError);
+        // Token is already saved; email failure is non-fatal
+      }
+    } else {
+      console.warn('⚠️ SMTP no configurado. URL de recuperación:', resetURL);
+    }
 
     return res.json({ success: true });
   } catch (error) {
     console.error('❌ Error forgot-password:', error);
     return res.status(500).json({ error: 'No se pudo procesar la recuperación.' });
+  }
+});
+
+app.post('/auth/reset-password-confirm', async (req, res) => {
+  const { email, code, newPassword } = req.body;
+
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({ error: 'Faltan datos requeridos.' });
+  }
+
+  try {
+    const resets = await sql`
+      SELECT pr.user_id
+      FROM password_resets pr
+      INNER JOIN users u ON u.id = pr.user_id
+      WHERE pr.token = ${code}
+        AND u.email = ${email}
+        AND pr.expires_at > NOW()
+    `;
+
+    if (resets.length === 0) {
+      return res.status(400).json({ error: 'El enlace de recuperación no es válido o ha expirado.' });
+    }
+
+    const userId = (resets[0] as { user_id: number }).user_id;
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    await sql`UPDATE users SET password_hash = ${passwordHash} WHERE id = ${userId}`;
+    await sql`DELETE FROM password_resets WHERE user_id = ${userId}`;
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error reset-password-confirm:', error);
+    return res.status(500).json({ error: 'No se pudo restablecer la contraseña.' });
   }
 });
 
