@@ -54,12 +54,12 @@
         <form onsubmit={handleRegister}>
             <div class="form-group">
                 <label for="name">Nombre Completo</label>
-                <input type="text" id="name" bind:value={name} placeholder="Juan Pérez" required class="themed-input" />
+                <input type="text" id="name" autocomplete="name" bind:value={name} placeholder="Juan Pérez" required class="themed-input" />
             </div>
             
             <div class="form-group">
                 <label for="email">Correo Electrónico</label>
-                <input type="email" id="email" bind:value={email} placeholder="juan@ejemplo.com" required class="themed-input" />
+                <input type="email" id="email" autocomplete="email" bind:value={email} placeholder="juan@ejemplo.com" required class="themed-input" />
             </div>
             
             <div class="form-group">
@@ -68,6 +68,7 @@
                     <input 
                         type={showPass ? "text" : "password"} 
                         id="password" 
+                        autocomplete="new-password"
                         bind:value={password} 
                         placeholder="••••••••" 
                         required 
@@ -90,6 +91,7 @@
                     <input 
                         type={showConfirm ? "text" : "password"} 
                         id="confirm" 
+                        autocomplete="new-password"
                         bind:value={confirmPassword} 
                         placeholder="Repite la contraseña" 
                         required 
