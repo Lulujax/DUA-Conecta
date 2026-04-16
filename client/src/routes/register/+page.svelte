@@ -1,6 +1,7 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
     import { api } from '$lib/api';
+    import { user } from '$lib/stores/auth';
     import { toast } from '$lib/stores/toast.svelte';
     import PasswordStrength from '$lib/components/ui/PasswordStrength.svelte';
 
@@ -30,10 +31,12 @@
         isLoading = true;
         try {
             const res = await api.post('/auth/register', { name, email, password });
-            if (res.success) {
-                toast.success('¡Cuenta creada!');
-                goto('/login');
+            if (!res.success || !res.user || !res.token) {
+                throw new Error(res.error || 'Error al registrarse.');
             }
+            user.loginSuccess(res.user, res.token);
+            toast.success('¡Cuenta creada!');
+            goto('/dashboard/plantillas');
         } catch (err: any) {
             toast.error(err.message || 'Error al registrarse.');
         } finally { isLoading = false; }
@@ -91,7 +94,7 @@
                     <input 
                         type={showConfirm ? "text" : "password"} 
                         id="confirm" 
-                        autocomplete="new-password"
+                        autocomplete="off"
                         bind:value={confirmPassword} 
                         placeholder="Repite la contraseña" 
                         required 

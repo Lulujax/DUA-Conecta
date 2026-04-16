@@ -20,10 +20,7 @@
     });
 
     function logout() {
-        user.set(null);
-        if (browser) {
-            window.location.href = '/';
-        }
+        user.logout('/');
     }
 </script>
 
