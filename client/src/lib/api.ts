@@ -1,6 +1,7 @@
-import { error } from '@sveltejs/kit';
+import { browser } from '$app/environment';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const TOKEN_KEY = 'auth_token';
 
 type SendOptions = {
     method: string;
@@ -16,14 +17,19 @@ async function send({ method, path, data, token }: SendOptions) {
         credentials: 'include' 
     };
 
+    // Auto-read token from localStorage if not explicitly provided.
+    // Most endpoints rely on this automatic injection; pass `token` explicitly
+    // only when you need to override the stored token.
+    const authToken = token || (browser ? localStorage.getItem(TOKEN_KEY) : null);
+
     if (data) {
         opts.headers = { 'Content-Type': 'application/json' };
         opts.body = JSON.stringify(data);
     }
 
-    if (token) {
+    if (authToken) {
         // @ts-ignore
-        opts.headers['Authorization'] = `Bearer ${token}`;
+        opts.headers['Authorization'] = `Bearer ${authToken}`;
     }
 
     try {
