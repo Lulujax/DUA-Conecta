@@ -1,19 +1,15 @@
 {
   "name": "server",
-  "module": "index.ts",
   "type": "module",
   "scripts": {
     "dev": "bun run --watch index.ts",
     "start": "node index.ts"
   },
   "dependencies": {
-    "@elysiajs/cors": "^1.2.0",
-    "@elysiajs/jwt": "^1.2.0",
     "@types/nodemailer": "^7.0.5",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "elysia": "1.2.0",
     "express": "^5.2.1",
     "html2canvas": "^1.4.1",
     "jsonwebtoken": "^9.0.2",

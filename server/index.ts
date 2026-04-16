@@ -5,48 +5,37 @@ import postgres from 'postgres';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
-// 1. Cargar variables de entorno
 dotenv.config();
 
 const app = express();
-const port = Number.parseInt(process.env.PORT || '3000', 10);
+const PORT = process.env.PORT || 3000;
 
 const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.error('❌ Error: DATABASE_URL no está configurada.');
-  process.exit(1);
-}
-
-if (!process.env.JWT_SECRET) {
-  console.error('❌ Error: JWT_SECRET no configurado.');
-  process.exit(1);
-}
-
-const JWT_SECRET = process.env.JWT_SECRET;
-
-const FRONTEND_URL = process.env.FRONTEND_URL || process.env.FRONTEND_PUBLIC_URL || 'http://localhost:5173';
-const CORS_ORIGIN = process.env.CORS_ORIGIN || FRONTEND_URL;
+const JWT_SECRET = process.env.JWT_SECRET || 'CLAVE_SECRETA_DE_FALLBACK';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY;
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const EMAIL_FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev';
-const RESET_TOKEN_EXPIRY_MS = Number(process.env.RESET_TOKEN_EXPIRY_MS) || 60 * 60 * 1000;
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
+const SMTP_HOST = process.env.SMTP_HOST;
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
 
-// 2. Configuración de Base de Datos (Postgres / Supabase)
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL no está definida');
+  process.exit(1);
+}
+
 const sql = postgres(DATABASE_URL, {
-  ssl: process.env.DATABASE_SSL === 'false' ? false : 'require',
+  ssl: 'require',
   max: 10,
   idle_timeout: 20,
   connect_timeout: 30
 });
 
-const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
-
-// 3. Configuración de Seguridad (CORS)
-const allowedOrigins = CORS_ORIGIN.split(',').map((origin) => origin.trim());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: [FRONTEND_URL, 'http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -54,98 +43,103 @@ app.use(cors({
 
 app.use(express.json({ limit: '50mb' }));
 
-type AuthUser = { id: number; name: string; email: string };
-type AuthRequest = express.Request & { user?: AuthUser };
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, service: 'dua-conecta-api' });
+});
 
-function signToken(userId: number) {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
-}
-
-async function requireAuth(req: AuthRequest, res: express.Response, next: express.NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Token de autorización faltante.' });
-  }
-
-  const token = authHeader.replace('Bearer ', '').trim();
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
-    const users = await sql`SELECT id, name, email FROM users WHERE id = ${decoded.userId}`;
-    if (users.length === 0) {
-      return res.status(401).json({ error: 'Usuario no válido.' });
-    }
-
-    req.user = users[0];
-    return next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Token inválido o expirado.' });
-  }
-}
+type AuthRequest = express.Request & {
+  user?: { id: number; email?: string; name?: string };
+};
 
 async function ensureSchema() {
   await sql`
-    CREATE TABLE IF NOT EXISTS activities (
+    CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL,
-      template_id INTEGER NOT NULL,
       name TEXT NOT NULL,
-      elements JSONB NOT NULL,
-      preview_img TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
     )
   `;
 
   await sql`
-    CREATE TABLE IF NOT EXISTS password_resets (
+    CREATE TABLE IF NOT EXISTS activities (
       id SERIAL PRIMARY KEY,
-      email TEXT NOT NULL,
-      token TEXT NOT NULL,
-      expires_at TIMESTAMPTZ NOT NULL,
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      elements JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preview_img TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
     )
   `;
 
-  await sql`CREATE INDEX IF NOT EXISTS activities_user_id_idx ON activities (user_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS password_resets_email_idx ON password_resets (email)`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS projects (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT,
+      width INTEGER,
+      height INTEGER,
+      elements JSONB NOT NULL DEFAULT '[]'::jsonb,
+      thumbnail_url TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
 }
 
-// ==========================================
-// 🔐 RUTAS DE AUTENTICACIÓN (/auth/...)
-// ==========================================
+function requireAuth(req: AuthRequest, res: express.Response, next: express.NextFunction) {
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Token de autorización faltante.' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: number; email?: string; name?: string };
+    req.user = decoded;
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Token inválido o expirado. Vuelve a iniciar sesión.' });
+  }
+}
 
 app.post('/auth/register', async (req, res) => {
   const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
-    return res.status(400).json({ error: 'Faltan datos obligatorios.' });
-  }
-
-  const normalizedPassword = String(password).trim();
-  if (normalizedPassword.length < 8) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
+    return res.status(400).json({ error: 'Faltan datos obligatorios' });
   }
 
   try {
     const existing = await sql`SELECT id FROM users WHERE email = ${email}`;
     if (existing.length > 0) {
-      return res.status(409).json({ error: 'El correo ya está registrado.' });
+      return res.status(409).json({ error: 'El correo ya está registrado' });
     }
 
-    const passwordHash = await bcrypt.hash(normalizedPassword, 10);
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
     const newUser = await sql`
       INSERT INTO users (name, email, password_hash)
       VALUES (${name}, ${email}, ${passwordHash})
       RETURNING id, name, email
     `;
 
-    const user = newUser[0];
-    const token = signToken(user.id);
+    const user = newUser[0] as { id: number; name: string; email: string };
+    const token = jwt.sign(
+      { id: user.id, email: user.email, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
-    return res.status(201).json({ success: true, user, token });
+    return res.status(201).json({
+      user,
+      token
+    });
   } catch (error) {
     console.error('❌ Error Registro:', error);
-    return res.status(500).json({ error: 'Error al registrar usuario en DB.' });
+    return res.status(500).json({ error: 'Error al registrar usuario en DB' });
   }
 });
 
@@ -153,276 +147,159 @@ app.post('/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({ error: 'Faltan credenciales.' });
+    return res.status(400).json({ error: 'Faltan credenciales' });
   }
 
   try {
     const users = await sql`SELECT * FROM users WHERE email = ${email}`;
+
     if (users.length === 0) {
-      return res.status(401).json({ error: 'Usuario no encontrado.' });
+      return res.status(401).json({ error: 'Usuario no encontrado' });
     }
 
-    const userRecord = users[0];
-    const match = await bcrypt.compare(password, userRecord.password_hash);
-    if (!match) {
-      return res.status(401).json({ error: 'Contraseña incorrecta.' });
+    const user = users[0] as any;
+    const valid = await bcrypt.compare(password, user.password_hash);
+
+    if (!valid) {
+      return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
 
-    const user = { id: userRecord.id, name: userRecord.name, email: userRecord.email };
-    const token = signToken(user.id);
+    const token = jwt.sign(
+      { id: user.id, email: user.email, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
-    return res.json({ success: true, user, token });
+    return res.json({
+      user: { id: user.id, name: user.name, email: user.email },
+      token
+    });
   } catch (error) {
     console.error('❌ Error Login:', error);
-    return res.status(500).json({ error: 'Error interno al iniciar sesión.' });
+    return res.status(500).json({ error: 'Error al iniciar sesión' });
   }
 });
 
-app.get('/auth/me', requireAuth, (req: AuthRequest, res) => {
-  return res.json({ success: true, user: req.user });
-});
-
-app.post('/auth/logout', (_req, res) => {
-  return res.json({ success: true });
+app.get('/auth/me', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.id;
+    const users = await sql`SELECT id, name, email FROM users WHERE id = ${userId}`;
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    return res.json({ user: users[0] });
+  } catch (error) {
+    console.error('❌ Error /auth/me:', error);
+    return res.status(500).json({ error: 'Error al obtener usuario' });
+  }
 });
 
 app.post('/auth/forgot-password', async (req, res) => {
   const { email } = req.body;
+
   if (!email) {
-    return res.status(400).json({ error: 'El correo es requerido.' });
+    return res.status(400).json({ error: 'Falta el correo' });
   }
 
-  if (!resend && process.env.NODE_ENV === 'production') {
-    return res.status(500).json({ error: 'Servicio de correo no configurado.' });
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+    return res.status(500).json({ error: 'Servidor de correo no configurado.' });
   }
-
-  const genericResponse = { success: true, message: 'Si el correo existe, se ha enviado un enlace.' };
 
   try {
     const users = await sql`SELECT id, email FROM users WHERE email = ${email}`;
     if (users.length === 0) {
-      return res.json(genericResponse);
+      return res.json({ success: true });
     }
 
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
+    const token = crypto.randomBytes(20).toString('hex');
 
-    await sql`DELETE FROM password_resets WHERE email = ${email}`;
-    await sql`
-      INSERT INTO password_resets (email, token, expires_at)
-      VALUES (${email}, ${token}, ${expiresAt})
-    `;
+    const transporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS }
+    });
 
-    const resetUrl = `${FRONTEND_URL}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+    const resetURL = `${FRONTEND_URL}/auth/reset-password?token=${token}`;
 
-    if (resend) {
-      await resend.emails.send({
-        from: `DUA Conecta <${EMAIL_FROM}>`,
-        to: [email],
-        subject: 'Recuperación de Contraseña DUA-Conecta',
-        html: `<p>Haz clic en este enlace para restablecer tu contraseña:</p><a href="${resetUrl}">${resetUrl}</a><p>El enlace expira en 1 hora.</p>`
-      });
-    } else {
-      console.warn('⚠️ RESEND_API_KEY no configurada. Enlace de recuperación generado.');
-    }
-
-    return res.json(genericResponse);
-  } catch (error) {
-    console.error('❌ Error Forgot Password:', error);
-    return res.status(500).json({ error: 'Error al procesar la solicitud.' });
-  }
-});
-
-app.post('/auth/reset-password-confirm', async (req, res) => {
-  const { email, code, newPassword } = req.body;
-  if (!email || !code || !newPassword) {
-    return res.status(400).json({ error: 'Datos incompletos.' });
-  }
-
-  const normalizedPassword = String(newPassword).trim();
-  if (normalizedPassword.length < 8) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
-  }
-
-  try {
-    const resets = await sql`
-      SELECT * FROM password_resets
-      WHERE email = ${email} AND token = ${code}
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-
-    if (resets.length === 0 || new Date(resets[0].expires_at) < new Date()) {
-      return res.status(400).json({ error: 'El enlace ha caducado.' });
-    }
-
-    const users = await sql`SELECT id, password_hash FROM users WHERE email = ${email}`;
-    if (users.length === 0) {
-      return res.status(404).json({ error: 'Usuario no encontrado.' });
-    }
-
-    const samePassword = await bcrypt.compare(normalizedPassword, users[0].password_hash);
-    if (samePassword) {
-      return res.status(400).json({ error: 'No uses la misma contraseña anterior.' });
-    }
-
-    const newHash = await bcrypt.hash(normalizedPassword, 10);
-    await sql`UPDATE users SET password_hash = ${newHash} WHERE id = ${users[0].id}`;
-    await sql`DELETE FROM password_resets WHERE email = ${email}`;
+    await transporter.sendMail({
+      from: SMTP_USER,
+      to: email,
+      subject: 'Recuperación de contraseña',
+      html: `<p>Haz clic aquí para restablecer tu contraseña:</p><a href="${resetURL}">${resetURL}</a>`
+    });
 
     return res.json({ success: true });
   } catch (error) {
-    console.error('❌ Error Reset Password:', error);
-    return res.status(500).json({ error: 'Error al restablecer contraseña.' });
+    console.error('❌ Error forgot-password:', error);
+    return res.status(500).json({ error: 'No se pudo procesar la recuperación.' });
   }
 });
-
-// ==========================================
-// 🖼️ PIXABAY PROXY
-// ==========================================
-
-app.get('/api/pixabay', async (req, res) => {
-  const query = req.query.q as string;
-  if (!query) {
-    return res.status(400).json({ error: 'El parámetro q es requerido.' });
-  }
-
-  if (!PIXABAY_API_KEY) {
-    return res.status(500).json({ error: 'PIXABAY_API_KEY no configurada.' });
-  }
-
-  try {
-    const url = new URL('https://pixabay.com/api/');
-    url.searchParams.set('key', PIXABAY_API_KEY);
-    url.searchParams.set('q', query);
-    url.searchParams.set('image_type', 'photo');
-    url.searchParams.set('safesearch', 'true');
-    url.searchParams.set('per_page', '20');
-
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-      return res.status(502).json({ error: 'Error al consultar Pixabay.' });
-    }
-
-    const data = await response.json();
-    return res.json(data);
-  } catch (error) {
-    console.error('❌ Error Pixabay:', error);
-    return res.status(500).json({ error: 'Error al buscar imágenes.' });
-  }
-});
-
-// ==========================================
-// 🎨 RUTAS DE PLANTILLAS
-// ==========================================
 
 app.get('/templates', async (_req, res) => {
   try {
-    const templates = await sql`
-      SELECT id, name, category, thumbnail_url, description,
-             COALESCE(width, 794) as width,
-             COALESCE(height, 1123) as height
-      FROM templates
-      ORDER BY id ASC
-    `;
+    const templates = await sql`SELECT * FROM templates ORDER BY id ASC`;
     return res.json({ templates });
   } catch (error) {
-    console.error('❌ Error Templates:', error);
-    return res.status(500).json({ error: 'Error al cargar galería.' });
+    console.error('❌ Error templates:', error);
+    return res.status(500).json({ error: 'No se pudieron cargar las plantillas' });
   }
 });
 
-app.get('/templates/:id', async (req, res) => {
-  const { id } = req.params;
+app.get('/api/search-images', async (req, res) => {
+  const { query } = req.query;
+
+  if (!query) {
+    return res.status(400).json({ error: 'El parámetro query es requerido.' });
+  }
+
+  if (!PIXABAY_API_KEY || PIXABAY_API_KEY.length < 10) {
+    return res.status(500).json({ error: 'Pixabay API Key no configurada.' });
+  }
+
   try {
-    const result = await sql`SELECT * FROM templates WHERE id = ${id}`;
-
-    if (result.length === 0) {
-      return res.status(404).json({ error: 'Plantilla no encontrada.' });
-    }
-
-    const tmpl = result[0];
-    const cleanTemplate = {
-      ...tmpl,
-      elements: tmpl.base_elements || tmpl.elements || []
-    };
-
-    return res.json({ template: cleanTemplate });
+    const response = await fetch(`https://pixabay.com/api/?key=${PIXABAY_API_KEY}&q=${encodeURIComponent(String(query))}&image_type=photo&safesearch=true&per_page=20`);
+    const data = await response.json();
+    const imageUrls = (data.hits || []).map((hit: any) => hit.webformatURL);
+    return res.json({ success: true, images: imageUrls });
   } catch (error) {
-    console.error(`❌ Error Template ${id}:`, error);
-    return res.status(500).json({ error: 'Error al cargar diseño.' });
+    console.error('❌ Pixabay API error:', error);
+    return res.status(500).json({ error: 'No se pudieron buscar imágenes.' });
   }
 });
 
-// ==========================================
-// 🗂️ RUTAS DE ACTIVIDADES
-// ==========================================
+app.post('/api/activities', requireAuth, async (req: AuthRequest, res) => {
+  const { name, elements, previewImg } = req.body;
 
-app.get('/api/activities', requireAuth, async (req: AuthRequest, res) => {
-  try {
-    const activities = await sql`
-      SELECT a.id,
-             a.name,
-             a.template_id,
-             a.preview_img,
-             a.updated_at,
-             t.thumbnail_url,
-             t.category
-      FROM activities a
-      LEFT JOIN templates t ON t.id = a.template_id
-      WHERE a.user_id = ${req.user!.id}
-      ORDER BY a.updated_at DESC
-    `;
-
-    return res.json({ success: true, activities });
-  } catch (error) {
-    console.error('❌ Error Activities:', error);
-    return res.status(500).json({ error: 'Error al cargar actividades.' });
-  }
-});
-
-app.get('/api/activities/:id', requireAuth, async (req: AuthRequest, res) => {
-  const { id } = req.params;
-  try {
-    const result = await sql`
-      SELECT * FROM activities
-      WHERE id = ${id} AND user_id = ${req.user!.id}
-      LIMIT 1
-    `;
-
-    if (result.length === 0) {
-      return res.status(404).json({ error: 'Actividad no encontrada.' });
-    }
-
-    return res.json({ success: true, activity: result[0] });
-  } catch (error) {
-    console.error('❌ Error Activity:', error);
-    return res.status(500).json({ error: 'Error al cargar la actividad.' });
-  }
-});
-
-app.post('/api/activities/save', requireAuth, async (req: AuthRequest, res) => {
-  const { name, templateId, elements, previewImg } = req.body;
-
-  if (!name || !templateId || !elements) {
+  if (!name || !elements) {
     return res.status(400).json({ error: 'Datos incompletos.' });
   }
 
   try {
     const created = await sql`
-      INSERT INTO activities (user_id, name, template_id, elements, preview_img)
-      VALUES (${req.user!.id}, ${name}, ${templateId}, ${sql.json(elements)}, ${previewImg})
-      RETURNING id, name
+      INSERT INTO activities (user_id, name, elements, preview_img)
+      VALUES (${req.user!.id}, ${name}, ${sql.json(elements)}, ${previewImg})
+      RETURNING id
     `;
-
-    return res.json({
-      success: true,
-      activityId: created[0].id,
-      message: 'Actividad guardada con éxito.'
-    });
+    return res.json({ success: true, activity: created[0] });
   } catch (error) {
-    console.error('❌ Error Guardar Actividad:', error);
+    console.error('❌ Error crear actividad:', error);
     return res.status(500).json({ error: 'No se pudo guardar la actividad.' });
+  }
+});
+
+app.get('/api/activities', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const activities = await sql`
+      SELECT *
+      FROM activities
+      WHERE user_id = ${req.user!.id}
+      ORDER BY created_at DESC
+    `;
+    return res.json({ activities });
+  } catch (error) {
+    console.error('❌ Error listar actividades:', error);
+    return res.status(500).json({ error: 'No se pudieron cargar las actividades.' });
   }
 });
 
@@ -451,13 +328,14 @@ app.put('/api/activities/:id', requireAuth, async (req: AuthRequest, res) => {
 
     return res.json({ success: true, message: 'Cambios guardados.' });
   } catch (error) {
-    console.error('❌ Error Actualizar Actividad:', error);
+    console.error('❌ Error actualizar actividad:', error);
     return res.status(500).json({ error: 'No se pudo actualizar la actividad.' });
   }
 });
 
 app.delete('/api/activities/:id', requireAuth, async (req: AuthRequest, res) => {
   const { id } = req.params;
+
   try {
     const deleted = await sql`
       DELETE FROM activities
@@ -471,14 +349,10 @@ app.delete('/api/activities/:id', requireAuth, async (req: AuthRequest, res) => 
 
     return res.json({ success: true });
   } catch (error) {
-    console.error('❌ Error Eliminar Actividad:', error);
+    console.error('❌ Error eliminar actividad:', error);
     return res.status(500).json({ error: 'No se pudo eliminar la actividad.' });
   }
 });
-
-// ==========================================
-// 💾 RUTAS DE PROYECTOS (LEGACY)
-// ==========================================
 
 app.post('/projects', requireAuth, async (req: AuthRequest, res) => {
   const { name, width, height, elements, thumbnailUrl } = req.body;
@@ -494,8 +368,8 @@ app.post('/projects', requireAuth, async (req: AuthRequest, res) => {
       RETURNING id, name
     `;
     return res.json({ success: true, project: newProject[0] });
-  } catch (e) {
-    console.error('❌ Error Guardar:', e);
+  } catch (error) {
+    console.error('❌ Error guardar proyecto:', error);
     return res.status(500).json({ error: 'No se pudo guardar el proyecto.' });
   }
 });
@@ -508,7 +382,8 @@ app.get('/projects', requireAuth, async (req: AuthRequest, res) => {
       ORDER BY created_at DESC
     `;
     return res.json({ projects });
-  } catch (e) {
+  } catch (error) {
+    console.error('❌ Error listar proyectos:', error);
     return res.status(500).json({ error: 'Error al cargar proyectos.' });
   }
 });
@@ -516,9 +391,9 @@ app.get('/projects', requireAuth, async (req: AuthRequest, res) => {
 async function startServer() {
   try {
     await ensureSchema();
-    app.listen(port, () => {
-      console.log(`🚀 Servidor backend corriendo en http://localhost:${port}`);
-      console.log(`🔗 Conectado a base de datos (Supabase)`);
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor backend corriendo en puerto ${PORT}`);
+      console.log(`🔗 Frontend permitido: ${FRONTEND_URL}`);
     });
   } catch (error) {
     console.error('❌ Error inicializando servidor:', error);
