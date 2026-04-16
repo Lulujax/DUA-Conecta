@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
+    import { user } from '$lib/stores/auth';
     import { toast } from '$lib/stores/toast.svelte';
 
 	let email = $state('');
@@ -12,10 +13,12 @@
 		isLoading = true;
 		try {
 			const res = await api.post('/auth/login', { email, password });
-			if (res.success) {
-                toast.success(`Bienvenido, ${res.user.name}`);
-				goto('/dashboard/plantillas');
-			}
+			if (!res.success || !res.user || !res.token) {
+                throw new Error(res.error || 'Credenciales incorrectas');
+            }
+            user.loginSuccess(res.user, res.token);
+            toast.success(`Bienvenido, ${res.user.name}`);
+			goto('/dashboard/plantillas');
 		} catch (err: any) {
             toast.error(err.message || 'Credenciales incorrectas');
 		} finally { isLoading = false; }
@@ -36,7 +39,7 @@
 		<form onsubmit={handleLogin}>
 			<div class="form-group">
 				<label for="email">Correo Electrónico</label>
-                <input type="email" id="email" autocomplete="email" bind:value={email} placeholder="tu@email.com" required class="themed-input" />
+				<input type="email" id="email" autocomplete="email" bind:value={email} placeholder="tu@email.com" required class="themed-input" />
 			</div>
 			
 			<div class="form-group">
@@ -44,7 +47,7 @@
                     <label for="password">Contraseña</label>
                     <a href="/forgot-password" class="forgot-link">¿Olvidaste tu contraseña?</a>
                 </div>
-                <input type="password" id="password" autocomplete="current-password" bind:value={password} placeholder="••••••••" required class="themed-input" />
+				<input type="password" id="password" autocomplete="current-password" bind:value={password} placeholder="••••••••" required class="themed-input" />
 			</div>
 			
 			<button type="submit" class="btn-primary" disabled={isLoading}>
