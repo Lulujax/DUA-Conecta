@@ -57,26 +57,26 @@
         <form onsubmit={handleRegister}>
             <div class="form-group">
                 <label for="name">Nombre Completo</label>
-                <input type="text" id="name" bind:value={name} autocomplete="name" placeholder="Juan Pérez" required class="themed-input" />
+                <input type="text" id="name" autocomplete="name" bind:value={name} placeholder="Juan Pérez" required class="themed-input" />
             </div>
             
             <div class="form-group">
                 <label for="email">Correo Electrónico</label>
-                <input type="email" id="email" bind:value={email} autocomplete="email" placeholder="juan@ejemplo.com" required class="themed-input" />
+                <input type="email" id="email" autocomplete="email" bind:value={email} placeholder="juan@ejemplo.com" required class="themed-input" />
             </div>
             
             <div class="form-group">
                 <label for="password">Contraseña</label>
                 <div class="input-wrapper">
-                        <input 
-                         type={showPass ? "text" : "password"} 
-                         id="password" 
-                         bind:value={password} 
-                         autocomplete="new-password"
-                         placeholder="••••••••" 
-                         required 
-                         class="themed-input has-icon" 
-                     />
+                    <input 
+                        type={showPass ? "text" : "password"} 
+                        id="password" 
+                        autocomplete="new-password"
+                        bind:value={password} 
+                        placeholder="••••••••" 
+                        required 
+                        class="themed-input has-icon" 
+                    />
                     <button type="button" class="eye-btn" onclick={() => showPass = !showPass} tabindex="-1">
                         {#if showPass}
                              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -91,15 +91,15 @@
             <div class="form-group">
                 <label for="confirm">Confirmar Contraseña</label>
                 <div class="input-wrapper">
-                        <input 
-                         type={showConfirm ? "text" : "password"} 
-                         id="confirm" 
-                         bind:value={confirmPassword} 
-                         autocomplete="off"
-                         placeholder="Repite la contraseña" 
-                         required 
-                         class="themed-input has-icon" 
-                     />
+                    <input 
+                        type={showConfirm ? "text" : "password"} 
+                        id="confirm" 
+                        autocomplete="off"
+                        bind:value={confirmPassword} 
+                        placeholder="Repite la contraseña" 
+                        required 
+                        class="themed-input has-icon" 
+                    />
                     <button type="button" class="eye-btn" onclick={() => showConfirm = !showConfirm} tabindex="-1">
                         {#if showConfirm}
                              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>

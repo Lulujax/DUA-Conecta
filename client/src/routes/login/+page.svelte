@@ -39,7 +39,7 @@
 		<form onsubmit={handleLogin}>
 			<div class="form-group">
 				<label for="email">Correo Electrónico</label>
-				<input type="email" id="email" bind:value={email} autocomplete="email" placeholder="tu@email.com" required class="themed-input" />
+				<input type="email" id="email" autocomplete="email" bind:value={email} placeholder="tu@email.com" required class="themed-input" />
 			</div>
 			
 			<div class="form-group">
@@ -47,7 +47,7 @@
                     <label for="password">Contraseña</label>
                     <a href="/forgot-password" class="forgot-link">¿Olvidaste tu contraseña?</a>
                 </div>
-				<input type="password" id="password" bind:value={password} autocomplete="current-password" placeholder="••••••••" required class="themed-input" />
+				<input type="password" id="password" autocomplete="current-password" bind:value={password} placeholder="••••••••" required class="themed-input" />
 			</div>
 			
 			<button type="submit" class="btn-primary" disabled={isLoading}>
