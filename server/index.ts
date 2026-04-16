@@ -222,8 +222,6 @@ app.post('/auth/forgot-password', async (req, res) => {
         subject: 'Recuperación de Contraseña DUA-Conecta',
         html: `<p>Haz clic en este enlace para restablecer tu contraseña:</p><a href="${resetUrl}">${resetUrl}</a><p>El enlace expira en 1 hora.</p>`
       });
-    } else if (process.env.NODE_ENV !== 'production') {
-      console.warn('⚠️ RESEND_API_KEY no configurada. Enlace de recuperación generado:', resetUrl);
     } else {
       console.warn('⚠️ RESEND_API_KEY no configurada. Enlace de recuperación generado.');
     }
