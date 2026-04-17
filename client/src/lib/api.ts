@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
+import { PUBLIC_API_URL } from '$env/static/public';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const BASE_URL = PUBLIC_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const TOKEN_KEY = 'auth_token';
 
 type SendOptions = {
@@ -34,6 +35,11 @@ async function send({ method, path, data, token }: SendOptions) {
 
     try {
         const res = await fetch(`${BASE_URL}${path}`, opts);
+        const contentType = res.headers.get('content-type') ?? '';
+        if (!contentType.includes('application/json')) {
+            console.error("API Error: unexpected non-JSON response", res.status, await res.text().catch(() => ''));
+            return { error: "Respuesta inválida del servidor", _status: res.status };
+        }
         const json = await res.json();
         // Attach the HTTP status so callers can check it without re-fetching
         return { ...json, _status: res.status };
