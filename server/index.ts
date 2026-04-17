@@ -30,6 +30,12 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
+if (FRONTEND_URL === 'http://localhost:5173' && process.env.NODE_ENV === 'production') {
+  console.warn('⚠️  ADVERTENCIA: FRONTEND_URL sigue siendo el valor por defecto (localhost). ' +
+    'Establece FRONTEND_URL=https://tu-app.vercel.app en las variables de entorno de Render ' +
+    'para que el CORS funcione en producción.');
+}
+
 const sql = postgres(DATABASE_URL, {
   ssl: 'require',
   max: 10,

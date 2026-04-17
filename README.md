@@ -141,10 +141,13 @@ El frontend estará disponible en `http://localhost:5173/` y el backend en el pu
 1. Importa el proyecto en [Vercel](https://vercel.com) y configura:
    - **Root Directory:** `client`
    - **Framework Preset:** SvelteKit
-2. Añade la siguiente **Environment Variable** en Vercel:
+2. Añade las siguientes **Environment Variables** en Vercel:
 
 | Variable | Valor |
 | :--- | :--- |
-| `VITE_API_URL` | URL pública de tu backend en Render (ej. `https://tu-backend.onrender.com`) |
+| `PUBLIC_API_URL` | URL pública de tu backend en Render (ej. `https://dua-conecta-backend.onrender.com`) |
+| `VITE_API_URL` | La misma URL que `PUBLIC_API_URL` |
 
-3. Redespliega el proyecto para que tome la nueva variable.
+> ⚠️ **Importante:** Ambas variables deben apuntar al mismo backend. `PUBLIC_API_URL` es necesario para las funciones de carga SSR de SvelteKit y `VITE_API_URL` sirve como fallback. Si sólo configuras una, algunas partes del frontend podrían seguir usando una URL antigua.
+
+3. Redespliega el proyecto para que tome las nuevas variables.
