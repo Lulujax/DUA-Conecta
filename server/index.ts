@@ -113,6 +113,18 @@ async function ensureSchema() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS templates (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      thumbnail_url TEXT NOT NULL DEFAULT '',
+      base_elements JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
 }
 
 function requireAuth(req: AuthRequest, res: express.Response, next: express.NextFunction) {
@@ -325,6 +337,24 @@ app.get('/templates', async (_req, res) => {
   } catch (error) {
     console.error('❌ Error templates:', error);
     return res.status(500).json({ error: 'No se pudieron cargar las plantillas' });
+  }
+});
+
+app.get('/templates/:id', async (req, res) => {
+  const { id } = req.params;
+  const numericId = parseInt(id, 10);
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    return res.status(400).json({ error: 'ID de plantilla inválido' });
+  }
+  try {
+    const rows = await sql`SELECT * FROM templates WHERE id = ${numericId}`;
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Plantilla no encontrada' });
+    }
+    return res.json({ template: rows[0] });
+  } catch (error) {
+    console.error('❌ Error template/:id:', error);
+    return res.status(500).json({ error: 'No se pudo cargar la plantilla' });
   }
 });
 
