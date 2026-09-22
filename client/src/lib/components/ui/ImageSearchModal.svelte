@@ -54,8 +54,8 @@
 </script>
 
 {#if isOpen}
-    <div class="modal-backdrop" transition:fade={{ duration: 200 }} onclick={onClose} role="dialog">
-        <div class="modal-card" transition:scale={{ duration: 200, start: 0.95 }} onclick={(e) => e.stopPropagation()}>
+    <div class="modal-backdrop" transition:fade={{ duration: 200 }} tabindex="-1" onclick={onClose} onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Escape') onClose(); }} role="dialog" aria-modal="true" aria-label="Buscar Imágenes">
+        <div class="modal-card" transition:scale={{ duration: 200, start: 0.95 }} role="presentation" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Escape') onClose(); }}>
             
             <div class="modal-header">
                 <h3>Buscar Imágenes</h3>
@@ -68,7 +68,6 @@
                     bind:value={query} 
                     placeholder="Ej: perro, escuela, sol..." 
                     onkeydown={handleKeydown}
-                    autofocus
                 />
                 <button class="btn-primary" onclick={handleSearch} disabled={isLoading}>
                     {isLoading ? '...' : 'Buscar'}

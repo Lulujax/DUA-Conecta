@@ -63,7 +63,7 @@
                 </div>
                 <div class="form-group">
                     <label for="pass">Crea una contraseña segura</label>
-                    <PasswordStrength bind:password={newPassword} bind:isValid={isPasswordValid} />
+                    <PasswordStrength password={newPassword} bind:isValid={isPasswordValid} />
                 </div>
                 <button type="submit" class="btn-primary" disabled={isLoading || !isPasswordValid}>
                     {isLoading ? 'Guardando...' : 'Cambiar Contraseña'}

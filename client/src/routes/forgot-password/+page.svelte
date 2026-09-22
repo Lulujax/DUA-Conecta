@@ -64,7 +64,7 @@
             <form onsubmit={handleReset}>
                 <div class="form-group">
                     <label for="pass">Define tu nueva clave</label>
-                    <PasswordStrength bind:password={newPassword} bind:isValid={isPasswordValid} />
+                    <PasswordStrength password={newPassword} bind:isValid={isPasswordValid} />
                 </div>
                 <button type="submit" class="btn-primary" disabled={isLoading || !isPasswordValid}>
                     {isLoading ? 'Guardando...' : 'Cambiar Contraseña'}

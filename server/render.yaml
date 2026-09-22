@@ -1,0 +1,34 @@
+envs:
+  - name: dua-conecta-api-env
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PIXABAY_API_KEY
+        sync: false
+      - key: PEXELS_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+
+services:
+  - type: web
+    name: dua-conecta-api
+    runtime: docker
+    repo: https://github.com/Lulujax/DUA-Conecta.git
+    rootDir: server
+    region: oregon
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - fromGroup: dua-conecta-api-env

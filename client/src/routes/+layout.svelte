@@ -1,5 +1,4 @@
-<script>
-  // IMPORTANTE: Carga los estilos globales (Tailwind o tu CSS personalizado)
+<script lang="ts">
   import '../app.css';
   
   import { onMount } from 'svelte';
@@ -10,22 +9,20 @@
 
   let { children } = $props();
 
-  const theme = writable(null);
+  const theme = writable<'light' | 'dark'>('light');
 
   onMount(() => {
-    // Recuperar tema preferido
-    const savedTheme = localStorage.getItem('theme');
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (savedTheme) { theme.set(savedTheme); } else { theme.set(systemPrefersDark ? 'dark' : 'light'); }
     
-    const unsubscribe = theme.subscribe(value => {
+    const unsubscribe = theme.subscribe((value: string | null) => {
       if (browser && value) { 
         document.documentElement.setAttribute('data-theme', value);
         localStorage.setItem('theme', value);
       }
     });
 
-    // Verificación de sesión segura
     if (user && typeof user.checkAuth === 'function') {
         user.checkAuth();
     }
@@ -34,7 +31,7 @@
   });
 
   function toggleTheme() {
-    theme.update(current => (current === 'light' ? 'dark' : 'light'));
+    theme.update((current: string) => (current === 'light' ? 'dark' : 'light'));
   }
 </script>
 

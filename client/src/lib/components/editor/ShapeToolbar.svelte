@@ -1,27 +1,30 @@
 <script lang="ts">
 	import { editorStore } from '../../editor/editor.store.svelte';
 
-	function stopToolbarClick(event: MouseEvent) { 
+	function stopToolbarClick(event: Event) { 
 		event.stopPropagation(); 
 	}
 
-	// --- *** NUEVA FUNCIÓN (Para el botón Sin Relleno) *** ---
 	function setFillTransparent() {
-		// Al poner 'null', el SVG lo renderizará como 'transparent'
 		editorStore.updateSelectedElement({ fill: null }, true);
 	}
+
+	let el = $derived(editorStore.selectedElement);
 </script>
 
-<div class="toolbar-wrapper" role="toolbar" aria-label="Herramientas de Forma" onclick={stopToolbarClick} onmousedown={stopToolbarClick}>
+{#if el}
+<div class="toolbar-wrapper" role="toolbar" aria-label="Herramientas de Forma" tabindex="0" onclick={stopToolbarClick} onmousedown={stopToolbarClick} onkeydown={stopToolbarClick}>
 	
-	<label class="toolbar-label">Tipo:</label>
+	<label class="toolbar-label" for="shape-type">Tipo:</label>
 	<select 
 		class="toolbar-select" 
-		value={editorStore.selectedElement.shapeType} 
+		id="shape-type"
+		value={el.shapeType} 
 		onchange={(e) => editorStore.updateSelectedElement({ shapeType: (e.currentTarget as HTMLSelectElement).value }, true)}
 	>
 		<option value="rectangle">Rectángulo</option>
 		<option value="circle">Círculo</option>
+		<option value="triangle">Triángulo</option>
 		<option value="line">Línea</option>
 		<option value="arrow">Flecha</option>
 	</select>
@@ -33,19 +36,19 @@
 		<input 
 			type="color" 
 			class="color-picker-input" 
-			value={editorStore.selectedElement.stroke || '#000000'} 
+			value={el.stroke || '#000000'} 
 			oninput={(e) => editorStore.updateSelectedElement({ stroke: (e.currentTarget as HTMLInputElement).value }, false)} 
 			onchange={(e) => editorStore.updateSelectedElement({ stroke: (e.currentTarget as HTMLInputElement).value }, true)} 
 		/>
 	</label>
 
-	{#if editorStore.selectedElement.shapeType === 'rectangle' || editorStore.selectedElement.shapeType === 'circle'}
+	{#if el.shapeType === 'rectangle' || el.shapeType === 'circle' || el.shapeType === 'triangle'}
 		<label class="toolbar-label" title="Color de Relleno">
 			Relleno:
 			<input 
 				type="color" 
 				class="color-picker-input" 
-				value={editorStore.selectedElement.fill || '#EEEEEE'} 
+				value={el.fill || '#EEEEEE'} 
 				oninput={(e) => editorStore.updateSelectedElement({ fill: (e.currentTarget as HTMLInputElement).value }, false)} 
 				onchange={(e) => editorStore.updateSelectedElement({ fill: (e.currentTarget as HTMLInputElement).value }, true)} 
 			/>
@@ -53,8 +56,9 @@
 
 		<button 
 			class="icon-button"
-			class:active={editorStore.selectedElement.fill === null}
+			class:active={el.fill === null}
 			title="Sin relleno (Transparente)"
+			aria-label="Sin relleno (Transparente)"
 			onclick={setFillTransparent}
 		>
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -62,20 +66,22 @@
 				<path d="M22 2 2 22"></path>
 			</svg>
 		</button>
-		{/if}
+	{/if}
 
 	<div class="toolbar-separator"></div>
 
-	<label class="toolbar-label">Grosor:</label>
+	<label class="toolbar-label" for="stroke-width">Grosor:</label>
 	<input 
 		type="number" 
 		class="toolbar-input" 
+		id="stroke-width"
 		min="1" 
 		max="50" 
-		value={editorStore.selectedElement.strokeWidth || 4} 
+		value={el.strokeWidth || 4} 
 		onchange={(e) => editorStore.updateSelectedElement({ strokeWidth: parseInt((e.currentTarget as HTMLInputElement).value) || 1 }, true)} 
 	/>
 </div>
+{/if}
 
 <style>
 	.toolbar-wrapper { 

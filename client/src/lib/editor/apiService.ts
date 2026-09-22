@@ -5,12 +5,11 @@ import { toast } from '$lib/stores/toast.svelte';
 async function loadActivity(id: number) {
 	try {
 		const result = await api.get(`/api/activities/${id}`);
-        // Verificación de seguridad
         if (result && result.activity) {
             const elements = result.activity.elements || [];
             editorStore.setLoadedActivity(result.activity.id, result.activity.name, elements);
         } else {
-            throw new Error("Datos incompletos");
+            throw new Error(result.error || "Datos incompletos");
         }
 	} catch (error) {
 		console.error('Fallo al cargar:', error);
@@ -30,7 +29,7 @@ async function saveChanges(templateId: string, previewImg: string | null = null)
 
 	const endpoint = currentId 
         ? `/api/activities/${currentId}`
-        : `/api/activities/save`;
+        : `/api/activities`;
 	
 	const payload = editorStore.getActivityPayload(templateId);
     payload.name = nameToSave; 
@@ -43,6 +42,10 @@ async function saveChanges(templateId: string, previewImg: string | null = null)
             ? api.put(endpoint, payload)
             : api.post(endpoint, payload)
         );
+
+        if (body.error) {
+            throw new Error(body.error);
+        }
 
 		if (!currentId && body.activityId) {
 			editorStore.setSavedAsNew(body.activityId, nameToSave);

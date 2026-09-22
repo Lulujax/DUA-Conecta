@@ -1,7 +1,7 @@
 export function debounce<T extends (...args: any[]) => void>(fn: T, wait = 200) {
-  let timer: number | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   return (...args: Parameters<T>) => {
-    if (timer) window.clearTimeout(timer);
-    timer = window.setTimeout(() => fn(...args), wait);
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), wait);
   };
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { editorStore } from './editor.store.svelte';
+	import { sanitizeRichText, safeColor } from '$lib/sanitize';
 	
 	let {
 		element,
@@ -27,8 +28,9 @@
 	// Sincronizar contenido
 	$effect(() => {
 		if (textElementRef && element.type === 'text') {
-			if (textElementRef.innerHTML !== element.content) {
-				textElementRef.innerHTML = element.content || '';
+			const safe = sanitizeRichText(element.content || '');
+			if (textElementRef.innerHTML !== safe) {
+				textElementRef.innerHTML = safe;
 			}
 		}
 	});
@@ -65,13 +67,11 @@
 	function handleDoubleClick(e: Event) {
 		if (element.type === 'text' && (e.target as HTMLElement)?.closest('.text-content')) {
 			isEditing = true;
-			$effect(() => {
-				requestAnimationFrame(() => {
-					if (isEditing && textElementRef) {
-						textElementRef.focus();
-						document.execCommand('selectAll', false, undefined);
-					}
-				});
+			requestAnimationFrame(() => {
+				if (isEditing && textElementRef) {
+					textElementRef.focus();
+					document.execCommand('selectAll', false, undefined);
+				}
 			});
 		}
 	}
@@ -261,12 +261,16 @@
 		editorStore.updateElement(element.id, { content: textElementRef.innerHTML }, true);
 	}
 	function renderShapeSVG(el: any) {
-		const stroke = el.stroke || '#000'; const strokeWidth = el.strokeWidth || 4;
-		const w = el.width || 100; const h = el.height || 20;
+		const stroke = safeColor(el.stroke, '#000');
+		const fill = safeColor(el.fill, 'transparent');
+		const strokeWidth = Math.max(1, Math.min(50, Number(el.strokeWidth) || 4));
+		const w = Math.max(1, Math.min(2000, Number(el.width) || 100));
+		const h = Math.max(1, Math.min(2000, Number(el.height) || 20));
 		if (el.shapeType === 'line') return `<svg width="${w}" height="${Math.max(1, strokeWidth)}" viewBox="0 0 ${w} ${Math.max(1, strokeWidth)}" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="50%" x2="${w}" y2="50%" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round"/></svg>`;
-		if (el.shapeType === 'arrow') return `<svg width="${w}" height="${Math.max(h, 18)}" viewBox="0 0 ${w} ${Math.max(h, 18)}" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="50%" x2="${w-10}" y2="50%" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round"/><polygon points="${w-12},${(h/2)-5} ${w},${h/2} ${w-12},${(h/2)+5}" fill="${stroke}"/></svg>`;
-		if (el.shapeType === 'circle') return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><circle cx="50%" cy="50%" r="${Math.min(w,h)/2 - strokeWidth/2}" stroke="${stroke}" stroke-width="${strokeWidth}" fill="${el.fill || 'transparent'}" /></svg>`;
-		return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${w}" height="${h}" stroke="${stroke}" stroke-width="${strokeWidth}" fill="${el.fill || 'transparent'}" /></svg>`;
+		if (el.shapeType === 'arrow') return `<svg width="${w}" height="${Math.max(h, 18)}" viewBox="0 0 ${w} ${Math.max(h, 18)}" xmlns="http://www.w3.org/2000/svg"><line x1="0" y1="50%" x2="${Math.max(1, w - 10)}" y2="50%" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round"/><polygon points="${Math.max(1, w - 12)},${(h / 2) - 5} ${w},${h / 2} ${Math.max(1, w - 12)},${(h / 2) + 5}" fill="${stroke}"/></svg>`;
+		if (el.shapeType === 'circle') return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><circle cx="50%" cy="50%" r="${Math.max(0, Math.min(w, h) / 2 - strokeWidth / 2)}" stroke="${stroke}" stroke-width="${strokeWidth}" fill="${fill}" /></svg>`;
+		if (el.shapeType === 'triangle') return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><polygon points="${w / 2},${strokeWidth / 2} ${w - strokeWidth / 2},${h - strokeWidth / 2} ${strokeWidth / 2},${h - strokeWidth / 2}" stroke="${stroke}" stroke-width="${strokeWidth}" fill="${fill}" stroke-linejoin="round"/></svg>`;
+		return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${w}" height="${h}" stroke="${stroke}" stroke-width="${strokeWidth}" fill="${fill}" /></svg>`;
 	}
 </script>
 
@@ -285,6 +289,12 @@
 	onmousedown={onDragStart}
 	ontouchstart={onDragStart} 
 	onclick={handleClick}
+	onkeydown={(e) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			if (!isEditing) onSelect(element.id, e);
+		}
+	}}
 	role="button"
 	tabindex={isEditing ? -1 : 0}
 	style:cursor={isEditing ? 'text' : 'grab'}
@@ -296,6 +306,10 @@
             <div
                 bind:this={textElementRef}
                 class="element-content text-content"
+                role="textbox"
+                aria-multiline="true"
+                aria-label="Texto editable"
+                tabindex={isEditing ? 0 : -1}
                 style:font-size="{element.fontSize}px"
                 style:color={element.color || '#000000'}
                 style:font-family={element.fontFamily || 'Arial, sans-serif'}
@@ -317,11 +331,11 @@
     </div>
 
 	{#if isSelected && !isEditing}
-		<div class="rotate-handle" onmousedown={onRotateStart} ontouchstart={onRotateStart} title="Rotar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
-		<div class="resize-handle tl" onmousedown={(e) => onResizeStart(e, 'tl')} ontouchstart={(e) => onResizeStart(e, 'tl')}></div>
-		<div class="resize-handle tr" onmousedown={(e) => onResizeStart(e, 'tr')} ontouchstart={(e) => onResizeStart(e, 'tr')}></div>
-		<div class="resize-handle bl" onmousedown={(e) => onResizeStart(e, 'bl')} ontouchstart={(e) => onResizeStart(e, 'bl')}></div>
-		<div class="resize-handle br" onmousedown={(e) => onResizeStart(e, 'br')} ontouchstart={(e) => onResizeStart(e, 'br')}></div>
+		<div class="rotate-handle" role="button" tabindex="-1" aria-label="Rotar" onmousedown={onRotateStart} ontouchstart={onRotateStart} title="Rotar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+		<div class="resize-handle tl" role="button" tabindex="-1" aria-label="Redimensionar desde la esquina superior izquierda" onmousedown={(e) => onResizeStart(e, 'tl')} ontouchstart={(e) => onResizeStart(e, 'tl')}></div>
+		<div class="resize-handle tr" role="button" tabindex="-1" aria-label="Redimensionar desde la esquina superior derecha" onmousedown={(e) => onResizeStart(e, 'tr')} ontouchstart={(e) => onResizeStart(e, 'tr')}></div>
+		<div class="resize-handle bl" role="button" tabindex="-1" aria-label="Redimensionar desde la esquina inferior izquierda" onmousedown={(e) => onResizeStart(e, 'bl')} ontouchstart={(e) => onResizeStart(e, 'bl')}></div>
+		<div class="resize-handle br" role="button" tabindex="-1" aria-label="Redimensionar desde la esquina inferior derecha" onmousedown={(e) => onResizeStart(e, 'br')} ontouchstart={(e) => onResizeStart(e, 'br')}></div>
 	{/if}
 </div>
 

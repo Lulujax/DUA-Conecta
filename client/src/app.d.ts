@@ -12,7 +12,7 @@ declare global {
     // --- DEFINICIONES DE TUS ELEMENTOS ---
     
     type ElementType = 'text' | 'image' | 'shape';
-    type ShapeType = 'rectangle' | 'circle' | 'line' | 'arrow';
+    type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'line' | 'arrow';
     type TextAlign = 'left' | 'center' | 'right' | 'justify';
 
     interface EditorElement {

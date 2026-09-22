@@ -22,13 +22,12 @@
     }>();
 
     let inputValue = $state(defaultValue);
+    let inputEl: HTMLInputElement | null = $state(null);
 
-    // Actualizar el input cuando se abre el modal con un valor por defecto
     $effect(() => {
         if (isOpen) {
             inputValue = defaultValue;
-            // Pequeño hack para enfocar el input automáticamente
-            setTimeout(() => document.getElementById('modal-input')?.focus(), 50);
+            setTimeout(() => inputEl?.focus(), 50);
         }
     });
 
@@ -48,19 +47,24 @@
     <div 
         class="modal-backdrop" 
         transition:fade={{ duration: 200 }}
+        tabindex="-1"
         onclick={onCancel}
+        onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Escape') onCancel(); }}
         role="dialog"
         aria-modal="true"
+        aria-labelledby="input-modal-title"
     >
         <div 
             class="modal-card" 
             transition:scale={{ duration: 300, easing: cubicOut, start: 0.95 }}
+            role="presentation"
             onclick={(e) => e.stopPropagation()} 
+            onkeydown={(e) => { e.stopPropagation(); if (e.key === 'Escape') onCancel(); }}
         >
-            <h3>{title}</h3>
+            <h3 id="input-modal-title">{title}</h3>
             
             <input 
-                id="modal-input"
+                bind:this={inputEl}
                 type="text" 
                 bind:value={inputValue} 
                 {placeholder}

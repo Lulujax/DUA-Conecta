@@ -2,7 +2,7 @@ import { tick } from 'svelte';
 
 // --- DEFINICIÓN DE TIPOS ---
 type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'line' | 'arrow';
-type TextAlign = 'left' | 'center' | 'right';
+type TextAlign = 'left' | 'center' | 'right' | 'justify';
 
 interface EditorElement {
 	id: number;
@@ -26,9 +26,15 @@ interface EditorElement {
 	url?: string;
 	// Shape props
 	shapeType?: ShapeType;
-	fill?: string;
+	fill?: string | null;
 	stroke?: string;
 	strokeWidth?: number;
+}
+
+// --- UTILIDADES ---
+let _idCounter = 0;
+function generateId(): number {
+	return Date.now() * 1000 + (_idCounter++ % 1000);
 }
 
 // --- ESTADO ---
@@ -68,8 +74,7 @@ function saveStateToHistory() {
 
 	if (history.length > 50) {
 		history.shift();
-		historyIndex--;
-		history = [...history]; 
+		historyIndex = Math.max(0, historyIndex - 1);
 	}
 	hasUnsavedChanges = true;
 }
@@ -115,11 +120,13 @@ function updateElement(id: number, data: any, isFinalChange: boolean = true) {
             if (el.type === 'image') {
                 const oldWidth = el.width;
                 const oldHeight = el.height;
-                if (data.width !== undefined && data.height === undefined && oldWidth > 0 && oldHeight > 0) {
-                    data.height = data.width / (oldWidth / oldHeight);
-                } else if (data.height !== undefined && data.width === undefined && oldWidth > 0 && oldHeight > 0) {
-                    data.width = data.height * (oldWidth / oldHeight);
+                const newData = { ...data };
+                if (newData.width !== undefined && newData.height === undefined && oldWidth > 0 && oldHeight > 0) {
+                    newData.height = newData.width / (oldWidth / oldHeight);
+                } else if (newData.height !== undefined && newData.width === undefined && oldWidth > 0 && oldHeight > 0) {
+                    newData.width = newData.height * (oldWidth / oldHeight);
                 }
+                return { ...el, ...newData };
             }
             return { ...el, ...data };
         }
@@ -166,7 +173,7 @@ function duplicateSelectedElement() {
 	const newElements = elements
         .filter(el => selectedIds.includes(el.id))
         .map(el => {
-            const newId = Date.now() + Math.floor(Math.random() * 10000);
+            const newId = generateId();
             newIds.push(newId);
             return { 
                 ...el,
@@ -192,13 +199,12 @@ function paste() {
     const fixedOffset = 10;
     const newIds: number[] = [];
     const pastedElements = clipboard.map((el: any) => {
-        el.x += fixedOffset;
-        el.y += fixedOffset;
-        const newId = Date.now() + Math.floor(Math.random() * 10000);
+        const newX = el.x + fixedOffset;
+        const newY = el.y + fixedOffset;
+        const newId = generateId();
         newIds.push(newId);
-        return { ...el, id: newId, z: nextZIndex++ };
+        return { ...el, x: newX, y: newY, id: newId, z: nextZIndex++ };
     });
-    clipboard = pastedElements; 
     elements = [...elements, ...pastedElements];
     selectedIds = newIds;
     saveStateToHistory();
@@ -213,13 +219,14 @@ function bringToFront() {
 
 function sendToBack() {
     if (selectedIds.length === 0) return;
-	updateSelectedElement({ z: 0 }, true); 
+    const minZ = elements.reduce((min, el) => Math.min(min, el.z), Infinity);
+    updateSelectedElement({ z: minZ - 1 }, true); 
 }
 
 // --- CREACIÓN ---
 function addText() {
 	const newElement: EditorElement = {
-		id: Date.now(), type: 'text', content: 'Nuevo Texto', 
+		id: generateId(), type: 'text', content: 'Nuevo Texto', 
 		x: 50, y: 50, width: 200, height: 30, 
 		fontSize: 16, color: '#000000', textAlign: 'left', 
         fontFamily: 'Arial', lineHeight: 1.4,
@@ -240,12 +247,13 @@ function addImage(file: File, x = 50, y = 50) {
 			const initialWidth = Math.min(150, img.width);
 			const initialHeight = aspect > 0 ? initialWidth / aspect : 150;
 			const newElement: EditorElement = {
-				id: Date.now(), type: 'image', url,
+				id: generateId(), type: 'image', url,
 				x: Math.max(0, x - initialWidth/2), y: Math.max(0, y - initialHeight/2), 
                 width: initialWidth, height: initialHeight,
 				opacity: 1, z: nextZIndex++, flipX: false
 			};
 			elements = [...elements, newElement];
+			selectedIds = [newElement.id];
             saveStateToHistory();
 		};
 		img.src = url;
@@ -255,7 +263,7 @@ function addImage(file: File, x = 50, y = 50) {
 
 function addImageFromUrl(url: string, x = 50, y = 50) {
 	const newElement: EditorElement = {
-		id: Date.now(), type: 'image', url, 
+		id: generateId(), type: 'image', url, 
 		x: x, y: y, width: 200, height: 200, opacity: 1, 
 		z: nextZIndex++, flipX: false
 	};
@@ -265,13 +273,13 @@ function addImageFromUrl(url: string, x = 50, y = 50) {
 }
 
 function addShape(type: ShapeType) {
-	const id = Date.now();
+	const id = generateId();
 	const shapeDefaults: EditorElement = {
 		id, type: 'shape', shapeType: type,
 		x: 100, y: 100,
-		width: (type === 'circle' || type === 'rectangle') ? 80 : 140, 
-		height: (type === 'circle' || type === 'rectangle') ? 80 : 20, 
-		stroke: '#000000', fill: (type === 'rectangle' || type === 'circle') ? '#EEEEEE' : null,
+		width: (type === 'circle' || type === 'rectangle' || type === 'triangle') ? 80 : 140, 
+		height: (type === 'circle' || type === 'rectangle' || type === 'triangle') ? 80 : 20, 
+		stroke: '#000000', fill: (type === 'rectangle' || type === 'circle' || type === 'triangle') ? '#EEEEEE' : null,
 		strokeWidth: 4, rotation: 0, z: nextZIndex++, flipX: false
 	};
 	elements = [...elements, shapeDefaults];
@@ -310,16 +318,12 @@ function changeLineHeight(newLineHeight: number) { updateSelectedElement({ lineH
 
 // --- GESTIÓN GLOBAL ---
 
-// *** AQUÍ ESTÁ LA CORRECCIÓN MAGISTRAL (init) ***
 function init(base: any, activityId: number | null, activityNameStr: string | null) {
     let safeBase = [];
 
-    // 1. Si es array, lo usamos
     if (Array.isArray(base)) {
         safeBase = base;
-    } 
-    // 2. Si es texto (string), intentamos convertirlo
-    else if (typeof base === 'string') {
+    } else if (typeof base === 'string') {
         try {
             safeBase = JSON.parse(base);
         } catch (e) {
@@ -327,10 +331,8 @@ function init(base: any, activityId: number | null, activityNameStr: string | nu
             safeBase = [];
         }
     }
-    // 3. Si sigue sin ser array, array vacío por seguridad
     if (!Array.isArray(safeBase)) safeBase = [];
 
-    // Ahora sí hacemos el map seguro
 	const processedBase = safeBase.map((el: any, i: number) => ({ ...el, z: el.z ?? (i + 1) }));
 	
     baseElements = structuredClone(processedBase);
@@ -348,7 +350,7 @@ function init(base: any, activityId: number | null, activityNameStr: string | nu
 }
 
 function setLoadedActivity(id: number, name: string, loadedElements: any) { init(loadedElements, id, name); }
-function resetToBase() { init(baseElements, null, 'Plantilla sin nombre'); }
+function resetToBase() { init(baseElements, currentActivityId, activityName); }
 function setSavedAsNew(id: number, name: string) { currentActivityId = id; activityName = name; hasUnsavedChanges = false; }
 function setChangesSaved() { hasUnsavedChanges = false; }
 function getActivityPayload(templateId: string) { return { name: activityName.trim() || "Plantilla sin nombre", templateId, elements }; }

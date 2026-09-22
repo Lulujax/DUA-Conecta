@@ -1,20 +1,20 @@
-<script>
+<script lang="ts">
     import { slide } from 'svelte/transition';
-    let openIndex = null;
+    let openIndex: number | null = $state(null);
     const faqs = [
         { q: "¿Es DUA-Conecta realmente gratuito?", a: "Sí, nuestra misión es apoyar a la educación inclusiva. Actualmente todas las herramientas y plantillas son de acceso libre." },
         { q: "¿Puedo usar mis propias imágenes?", a: "¡Por supuesto! En el editor, puedes subir fotos desde tu dispositivo para personalizar las actividades." },
         { q: "¿Se guardan mis actividades?", a: "Sí. Si tienes una cuenta registrada, todo lo que crees se guardará en la sección 'Mis Actividades'." },
         { q: "¿En qué formato se descargan las fichas?", a: "Todas las actividades se descargan en formato PDF de alta calidad." }
     ];
-    function toggle(index) { openIndex = openIndex === index ? null : index; }
+    function toggle(index: number) { openIndex = openIndex === index ? null : index; }
 </script>
 
 <svelte:head><title>FAQ - DUA-Conecta</title></svelte:head>
 
 <div class="page-header-wrapper">
     <div class="container">
-        <a href="javascript:history.back()" class="back-btn">← Volver</a>
+        <a href="/" class="back-btn" onclick={(e) => { e.preventDefault(); if (window.history.length > 1) window.history.back(); else window.location.href = '/'; }}>← Volver</a>
     </div>
 </div>
 
@@ -26,7 +26,7 @@
     <div class="faq-grid">
         {#each faqs as faq, i}
             <div class="faq-item" class:active={openIndex === i}>
-                <button class="faq-question" on:click={() => toggle(i)}>
+                <button class="faq-question" onclick={() => toggle(i)}>
                     {faq.q}
                     <span class="icon">{openIndex === i ? '−' : '+'}</span>
                 </button>

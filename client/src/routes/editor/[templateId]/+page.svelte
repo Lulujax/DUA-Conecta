@@ -11,7 +11,7 @@
     let errorMsg = $state('');
     
     // Reactividad: Observamos el ID de la URL
-    let currentTemplateId = $derived($page.params.templateId);
+    let currentTemplateId = $derived($page.params.templateId as string);
     let currentActivityId = $derived($page.url.searchParams.get('activityId'));
 
     async function loadEditorData(tId: string, aId: string | null) {
@@ -30,13 +30,15 @@
 
             // 2. Decidir qué cargar
             if (aId) {
-                try {
-                    const activityRes = await api.get(`/api/activities/${aId}`);
-                    if (activityRes.activity) {
-                        baseElements = activityRes.activity.elements;
-                    }
-                } catch (e) {
-                    console.warn("Usando base por error al cargar actividad");
+                const activityRes = await api.get(`/api/activities/${aId}`);
+                if (activityRes.activity) {
+                    baseElements = activityRes.activity.elements;
+                } else if (activityRes.status === 404) {
+                    // Actividad inexistente o de otro usuario: avisar, no abrir editor vacío
+                    errorMsg = "La actividad no existe o no tienes acceso a ella.";
+                } else {
+                    // Error de red/servidor al cargar la actividad: usar la plantilla base
+                    console.warn("Usando plantilla base por error al cargar actividad", activityRes);
                     baseElements = structuredClone(templateRes.template.base_elements);
                 }
             } else {

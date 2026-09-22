@@ -1,6 +1,6 @@
 <script>
-    let subject = '';
-    let body = '';
+    let subject = $state('');
+    let body = $state('');
     function sendEmail() {
         const email = "soporte@dua-conecta.com";
         window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -11,7 +11,7 @@
 
 <div class="page-header-wrapper">
     <div class="container">
-        <a href="javascript:history.back()" class="back-btn">← Volver</a>
+        <a href="/" class="back-btn" onclick={(e) => { e.preventDefault(); if (window.history.length > 1) window.history.back(); else window.location.href = '/'; }}>← Volver</a>
     </div>
 </div>
 
@@ -19,7 +19,7 @@
     <div class="contact-card">
         <h1>Contáctanos</h1>
         <p>¿Tienes alguna duda o sugerencia? Escríbenos.</p>
-        <form on:submit|preventDefault={sendEmail}>
+        <form onsubmit={(e) => { e.preventDefault(); sendEmail(); }}>
             <div class="form-group">
                 <label for="subject">Asunto</label>
                 <input type="text" id="subject" bind:value={subject} placeholder="Ej: Problema con una plantilla" required>

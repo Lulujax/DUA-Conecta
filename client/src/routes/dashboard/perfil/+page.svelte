@@ -99,7 +99,7 @@
 
                 <div class="form-group">
                     <label for="newPass">Nueva Contraseña</label>
-                    <PasswordStrength bind:password={newPassword} bind:isValid={isNewPasswordValid} />
+                    <PasswordStrength password={newPassword} bind:isValid={isNewPasswordValid} />
                 </div>
 
                 <button type="submit" class="btn-save" disabled={isSavingPass || !isNewPasswordValid || !currentPassword}>
@@ -121,7 +121,7 @@
     .header p { color: var(--text-light); font-size: 1.1rem; }
 
     .grid-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; align-items: start; }
-    .card { background: white; border: 1px solid var(--border-color); border-radius: 20px; padding: 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+    .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; padding: 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
     
     .info-card { text-align: center; display: flex; flex-direction: column; align-items: center; }
     .avatar-circle { width: 100px; height: 100px; background: linear-gradient(135deg, #A084E8, #8b6fd0); color: white; font-size: 3rem; font-weight: 700; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; box-shadow: 0 10px 20px rgba(160, 132, 232, 0.3); }

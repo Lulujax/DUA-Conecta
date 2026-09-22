@@ -1,28 +1,27 @@
 <script lang="ts">
-	// Importamos el store usando la ruta relativa correcta
 	import { editorStore } from '../../editor/editor.store.svelte';
 
-	// Función para evitar que al hacer clic en la barra se deseleccione el elemento
-	function stopToolbarClick(event: MouseEvent) { 
+	function stopToolbarClick(event: Event) { 
 		event.stopPropagation(); 
 	}
 
-	// Función para formatear el valor de opacidad (ej. 0.8 -> 80%)
 	function formatOpacity(value: number | undefined): number {
 		if (value === undefined) value = 1;
 		return Math.round(value * 100);
 	}
 
-	// Función para actualizar el store desde el slider (ej. 80 -> 0.8)
 	function updateOpacity(e: Event) {
 		const value = parseInt((e.currentTarget as HTMLInputElement).value);
 		editorStore.updateSelectedElement({ opacity: value / 100 }, true);
 	}
+
+	let el = $derived(editorStore.selectedElement);
 </script>
 
-<div class="toolbar-wrapper" role="toolbar" aria-label="Herramientas de Imagen" onclick={stopToolbarClick} onmousedown={stopToolbarClick}>
+{#if el}
+<div class="toolbar-wrapper" role="toolbar" aria-label="Herramientas de Imagen" tabindex="0" onclick={stopToolbarClick} onmousedown={stopToolbarClick} onkeydown={stopToolbarClick}>
 	
-	<label class="toolbar-label" title="Opacidad de la imagen">
+	<label class="toolbar-label" for="opacity-slider" title="Opacidad de la imagen">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 			<path d="M12 21a9 9 0 0 1 0-18v18z"></path>
 			<path d="M12 3a9 9 0 0 1 0 18"></path>
@@ -31,14 +30,16 @@
 	<input 
 		type="range" 
 		class="toolbar-slider" 
+		id="opacity-slider"
 		min="0" 
 		max="100" 
-		value={formatOpacity(editorStore.selectedElement.opacity)} 
+		value={formatOpacity(el.opacity)} 
 		oninput={updateOpacity}
 	/>
-	<span class="toolbar-value">{formatOpacity(editorStore.selectedElement.opacity)}%</span>
+	<span class="toolbar-value">{formatOpacity(el.opacity)}%</span>
 	
 </div>
+{/if}
 
 <style>
 	/* Estilos base de la barra (idénticos a las otras toolbars) */

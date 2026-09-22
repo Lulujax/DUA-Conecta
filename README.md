@@ -33,8 +33,9 @@ El diseño se basa en tres pilares teóricos fundamentales:
 | Componente | Tecnología | Descripción |
 | :--- | :--- | :--- |
 | **Frontend (UI)** | **SvelteKit + Svelte 5** | Interfaz de usuario reactiva y rápida. |
-| **Backend (API)** | **Bun + ElysiaJS** | Servidor ligero, de alto rendimiento con TypeScript. |
+| **Backend (API)** | **Express 5 + postgres.js** | API REST con TypeScript ejecutada con Bun. |
 | **Base de Datos** | **PostgreSQL** | Almacenamiento seguro y robusto de actividades y plantillas. |
+| **PDF / Emails** | **html2canvas + jsPDF / nodemailer (SMTP)** | Export a PDF listo para imprimir y recuperación de contraseña. |
 | **Dev Tools** | **Bun Runtime** | Entorno de ejecución y gestor de paquetes unificado. |
 
 ## ✍️ Creadores
@@ -85,23 +86,27 @@ VITE_API_URL=http://localhost:3000
 
 Ejecuta estos comandos desde la carpeta raíz del proyecto (`dua-conecta/`):
 
-1.  **Instalar dependencias:**
+1.  **Instalar dependencias** (hay un `package.json` por carpeta):
 
     ```bash
-    bun install
+    bun install                    # raíz (solo deps de PDF)
+    cd client && bun install
+    cd ../server && bun install
     ```
 
 2.  **Inicializar la base de datos (con datos de ejemplo):**
-    *Asegúrate de que tu DB esté corriendo y la `DATABASE_URL` sea correcta.*
+    *Asegúrate de que tu DB esté corriendo y la `DATABASE_URL` sea correcta.* El seed lee `server/.env` desde el directorio de trabajo, así que se ejecuta desde `server/`:
 
     ```bash
-    bun run server/seed.ts
+    cd server
+    bun run seed.ts
     ```
 
-3.  **Ejecutar el servidor (API y Auth):**
+3.  **Ejecutar el servidor (API y Auth):** *también desde `server/`, porque Bun carga el `.env` desde el directorio de trabajo.*
 
     ```bash
-    bun run server/index.ts --watch 
+    cd server
+    bun run --watch index.ts
     ```
 
 4.  **Ejecutar el Frontend (SvelteKit):**
@@ -111,43 +116,45 @@ Ejecuta estos comandos desde la carpeta raíz del proyecto (`dua-conecta/`):
     bun run dev
     ```
 
+> **Nota:** el servidor **no arranca** sin una `JWT_SECRET` válida en `server/.env` (mínimo 20 caracteres; nunca uses el valor por defecto).
+
 El frontend estará disponible en `http://localhost:5173/` y el backend en el puerto configurado (ej. `http://localhost:3000`).
 
 -----
 
 ## 🚀 Despliegue en Producción (Vercel + Render)
 
+La infraestructura de despliegue ya está versionada en el repo:
+
+- `server/Dockerfile` + `server/render.yaml` → backend en Render (imagen `oven/bun:1`, health check `/health`).
+- `client/vercel.json` → frontend en Vercel (preset SvelteKit; el build usa npm, `package-lock.json`).
+- El cliente usa `@sveltejs/adapter-auto`, que en el build de Vercel instala automáticamente `adapter-vercel`.
+
 ### Backend en Render
 
-1. Crea un nuevo **Web Service** en [Render](https://render.com) apuntando al repo.
-2. Configura:
-   - **Root Directory:** `server`
-   - **Build Command:** `npm install` (o `bun install`)
-   - **Start Command:** `node --experimental-strip-types index.ts` (o `bun run index.ts`)
-3. Añade las siguientes **Environment Variables** en Render:
+1. Sube los cambios a GitHub.
+2. En [Render](https://render.com): **New + → Blueprint**. Apunta al repo `Lulujax/DUA-Conecta` y al archivo `server/render.yaml`. Render preguntará por los secretos (`sync: false`) del grupo `dua-conecta-api-env`:
 
 | Variable | Descripción |
 | :--- | :--- |
-| `DATABASE_URL` | URL de conexión a Supabase/PostgreSQL |
-| `JWT_SECRET` | Secreto largo y aleatorio para JWT |
-| `FRONTEND_URL` | URL pública del frontend en Vercel (ej. `https://tu-app.vercel.app`) |
-| `PIXABAY_API_KEY` | API Key de Pixabay (opcional) |
-| `RESEND_API_KEY` | API Key de Resend para emails (opcional) |
+| `DATABASE_URL` | URL de conexión a PostgreSQL (Supabase u otro host) |
+| `JWT_SECRET` | Secreto JWT ≥ 20 caracteres (obligatorio; el server no arranca sin él) |
+| `FRONTEND_URL` | URL pública del frontend en Vercel (ej. `https://dua-conecta.vercel.app`) — clave para CORS y enlaces de recuperación |
+| `PIXABAY_API_KEY` | API Key de Pixabay (opcional, ≥ 10 caracteres) |
+| `PEXELS_API_KEY` | API Key de Pexels (opcional) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | SMTP para "recuperar contraseña" (ej. Gmail con contraseña de aplicación) |
 
-> `FRONTEND_URL` es la clave para que el CORS permita peticiones desde Vercel.
+3. Tras el primer despliegue, **siembra las plantillas** en la DB de producción desde la pestaña **Shell** del servicio: `bun run seed.ts`.
 
 ### Frontend en Vercel
 
-1. Importa el proyecto en [Vercel](https://vercel.com) y configura:
-   - **Root Directory:** `client`
-   - **Framework Preset:** SvelteKit
-2. Añade las siguientes **Environment Variables** en Vercel:
+1. Importa el repo `Lulujax/DUA-Conecta` en [Vercel](https://vercel.com).
+2. Root Directory: `client` · Framework Preset: SvelteKit (`vercel.json`).
+3. Añade las **Environment Variables** (ambas obligatorias):
 
 | Variable | Valor |
 | :--- | :--- |
-| `PUBLIC_API_URL` | URL pública de tu backend en Render (ej. `https://dua-conecta-backend.onrender.com`) |
-| `VITE_API_URL` | La misma URL que `PUBLIC_API_URL` |
+| `VITE_API_URL` | URL pública del backend en Render (ej. `https://dua-conecta-api.onrender.com`) |
+| `PUBLIC_API_URL` | La misma URL del backend |
 
-> ⚠️ **Importante:** Ambas variables deben apuntar al mismo backend. `PUBLIC_API_URL` es necesario para las funciones de carga SSR de SvelteKit y `VITE_API_URL` sirve como fallback. Si sólo configuras una, algunas partes del frontend podrían seguir usando una URL antigua.
-
-3. Redespliega el proyecto para que tome las nuevas variables.
+> `PUBLIC_API_URL` se usa en el loader de `/dashboard/plantillas` vía `$env/static/public`; sin ella el build falla.
