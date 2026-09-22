@@ -91,7 +91,7 @@
             </div>
             
             <div class="footer">
-                <span class="attribution">Powered by Pixabay</span>
+                <span class="attribution">Búsqueda de imágenes: Pixabay y Pexels</span>
             </div>
         </div>
     </div>

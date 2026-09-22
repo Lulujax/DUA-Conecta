@@ -20,6 +20,7 @@ const ADDITIONAL_ORIGINS = process.env.ADDITIONAL_ORIGINS
   ? process.env.ADDITIONAL_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
   : [];
 const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY;
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
 const SMTP_USER = process.env.SMTP_USER;
@@ -448,6 +449,44 @@ app.get('/templates/:id', async (req, res) => {
 
 // --- IMAGES ---
 
+// Busca imágenes primero en Pixabay; si no da resultados (o falla) y hay
+// PEXELS_API_KEY configurada, hace fallback a Pexels. Normaliza ambos
+// providers al mismo shape { webformatURL, previewURL, tags } que espera el cliente.
+async function fetchImageHits(query: string): Promise<any[]> {
+  if (PIXABAY_API_KEY && PIXABAY_API_KEY.length >= 10) {
+    try {
+      const response = await fetch(`https://pixabay.com/api/?key=${PIXABAY_API_KEY}&q=${encodeURIComponent(query)}&image_type=photo&safesearch=true&per_page=20`);
+      const data = await response.json();
+      const hits = (data.hits || []).map((hit: any) => ({
+        webformatURL: hit.webformatURL,
+        previewURL: hit.previewURL,
+        tags: hit.tags
+      }));
+      if (hits.length > 0) return hits;
+    } catch (error) {
+      console.error('❌ Pixabay API error:', error);
+    }
+  }
+
+  if (PEXELS_API_KEY && PEXELS_API_KEY.length >= 10) {
+    try {
+      const response = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=20&orientation=landscape`, {
+        headers: { Authorization: PEXELS_API_KEY }
+      });
+      const data = await response.json();
+      return (data.photos || []).map((photo: any) => ({
+        webformatURL: photo.src.large2x || photo.src.large || photo.src.medium,
+        previewURL: photo.src.small || photo.src.medium,
+        tags: photo.alt || ''
+      }));
+    } catch (error) {
+      console.error('❌ Pexels API error:', error);
+    }
+  }
+
+  return [];
+}
+
 app.get('/api/search-images', async (req, res) => {
   const { query } = req.query;
 
@@ -456,20 +495,16 @@ app.get('/api/search-images', async (req, res) => {
   }
 
   if (!PIXABAY_API_KEY || PIXABAY_API_KEY.length < 10) {
-    return res.status(500).json({ error: 'Pixabay API Key no configurada.' });
+    if (!PEXELS_API_KEY || PEXELS_API_KEY.length < 10) {
+      return res.status(500).json({ error: 'No hay ninguna API de imágenes configurada.' });
+    }
   }
 
   try {
-    const response = await fetch(`https://pixabay.com/api/?key=${PIXABAY_API_KEY}&q=${encodeURIComponent(String(query))}&image_type=photo&safesearch=true&per_page=20`);
-    const data = await response.json();
-    const hits = (data.hits || []).map((hit: any) => ({
-      webformatURL: hit.webformatURL,
-      previewURL: hit.previewURL,
-      tags: hit.tags
-    }));
+    const hits = await fetchImageHits(String(query));
     return res.json({ success: true, hits });
   } catch (error) {
-    console.error('❌ Pixabay API error:', error);
+    console.error('❌ Error buscando imágenes:', error);
     return res.status(500).json({ error: 'No se pudieron buscar imágenes.' });
   }
 });
@@ -482,15 +517,16 @@ app.get('/api/pixabay', async (req, res) => {
   }
 
   if (!PIXABAY_API_KEY || PIXABAY_API_KEY.length < 10) {
-    return res.status(500).json({ error: 'Pixabay API Key no configurada.' });
+    if (!PEXELS_API_KEY || PEXELS_API_KEY.length < 10) {
+      return res.status(500).json({ error: 'No hay ninguna API de imágenes configurada.' });
+    }
   }
 
   try {
-    const response = await fetch(`https://pixabay.com/api/?key=${PIXABAY_API_KEY}&q=${encodeURIComponent(String(q))}&image_type=photo&safesearch=true&per_page=20`);
-    const data = await response.json();
-    return res.json({ hits: data.hits || [] });
+    const hits = await fetchImageHits(String(q));
+    return res.json({ hits });
   } catch (error) {
-    console.error('❌ Pixabay API error:', error);
+    console.error('❌ Error buscando imágenes:', error);
     return res.status(500).json({ error: 'No se pudieron buscar imágenes.' });
   }
 });

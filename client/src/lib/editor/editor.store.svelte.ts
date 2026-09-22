@@ -240,9 +240,25 @@ function addText() {
 function addImage(file: File, x = 50, y = 50) {
 	const reader = new FileReader();
 	reader.onload = (e) => {
-		const url = e.target?.result as string;
+		const originalUrl = e.target?.result as string;
 		const img = new Image();
 		img.onload = () => {
+            // Reescalar a 1600px máx. para no guardar fotos de 6MB en JSONB
+            // (el límite de body de Express es 10MB). El data URL generado
+            // se guarda en el element y persiste en la base de datos.
+            const MAX_DIM = 1600;
+            const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+            let url = originalUrl;
+            if (scale < 1) {
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    url = canvas.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.85);
+                }
+            }
             const aspect = img.width / img.height;
 			const initialWidth = Math.min(150, img.width);
 			const initialHeight = aspect > 0 ? initialWidth / aspect : 150;
@@ -256,7 +272,7 @@ function addImage(file: File, x = 50, y = 50) {
 			selectedIds = [newElement.id];
             saveStateToHistory();
 		};
-		img.src = url;
+		img.src = originalUrl;
 	};
 	reader.readAsDataURL(file);
 }

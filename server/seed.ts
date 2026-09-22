@@ -457,7 +457,7 @@ async function main() {
             await sql`INSERT INTO templates (name, category, thumbnail_url, description, base_elements) VALUES (${t.name}, ${t.category}, ${t.thumbnail_url}, ${t.description}, ${sql.json(t.base_elements)})`;
             console.log(`   ✅ ${t.name}`);
         }
-        console.log("\n🎉 ¡LISTO! 20 Plantillas cargadas.");
+        console.log(`\n🎉 ¡LISTO! ${templates.length} Plantillas cargadas.`);
         process.exit(0);
     } catch (error) {
         console.error("❌ Error:", error);
