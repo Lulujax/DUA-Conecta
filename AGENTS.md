@@ -27,8 +27,8 @@ Spanish-language app (DUA-Conecta, printable classroom activities editor). Two i
 - **Image proxy** `GET /api/image-proxy?url=...` (requireAuth) re-serves Pixabay/Pexels images with `Access-Control-Allow-Origin: *` so html2canvas PDF export doesn't hit a tainted canvas. Host allowlist only (`pixabay.com`, `pexels.com` + subdomains) to avoid SSRF.
 
 ## Client gotchas
-- Env: `VITE_API_URL` (used by `src/lib/api.ts`) and `PUBLIC_API_URL` (used in `+page.ts` loaders via `$env/static/public`). Set both (see `client/.env.example`).
-- `$lib/api` auto-attaches the stored JWT (`localStorage` keys `auth_token`, `user_profile`) and returns `{ error, status }` instead of throwing — check `res.error`, don't try/catch for HTTP errors.
+- Env: `VITE_API_URL` and `PUBLIC_API_URL` (set BOTH identically; see `client/.env.example`). `src/lib/api.ts` uses `PUBLIC_API_URL || VITE_API_URL || localhost`; `+page.ts` loaders use `$env/static/public`. **`PUBLIC_API_URL` missing makes the build fail** (`$env/static/public` throws) — set it in Vercel.
+- `$lib/api` auto-attaches the stored JWT (`localStorage` keys `auth_token`, `user_profile`) and returns `{ error, status, _status }` instead of throwing — check `res.error`, don't try/catch for HTTP errors. `status` and `_status` are the same value; both exist so old callers keep working.
 - Editor route `editor/[templateId]`: `/api/activities/:id` returns 404 `{error}` when the activity doesn't exist **or belongs to another user** — the page shows "La actividad no existe o no tienes acceso a ella." (no blank editor). Any other activity-fetch error falls back to the template's `base_elements`.
 - **Accessibility (keep `bun run check` at 0 errors AND 0 warnings):** toolbars use `role="toolbar"` + `tabindex="0"` + `onkeydown`; modal backdrop is `role="dialog" tabindex="-1"` with Escape-to-close, card is `role="presentation"`; icon-only buttons always carry `title` + matching `aria-label`; color input `<label>`s are associated via `for`/`id` (no listeners on the label — attach `onmousedown` to the input instead); `contenteditable` in Draggable has `role="textbox" aria-multiline` + `tabindex`; drag/rotate/resize handles have `role="button"` + `aria-label`; no `autofocus`, no `href="javascript:..."` (use `/` + `history.back()` fallback). `stopToolbarClick` must be typed `(event: Event)` (shared by click/mousedown/keydown).
 - Template/element model: JSON objects `{ type, x, y, width, height, z, fontSize, color, fontFamily, ... }` stored as JSONB, rendered by fabric; `seed.ts` defines the canonical ES/EN template pairs.
@@ -36,6 +36,12 @@ Spanish-language app (DUA-Conecta, printable classroom activities editor). Two i
 - **XSS guard**: `$lib/sanitize.ts` provides `sanitizeRichText` (rich text, applied to contenteditable content in `Draggable.svelte`) and `safeColor` (SVG shape colors). Never inject raw `element.content` via `innerHTML`/`{@html}` — always go through it.
 - Static template assets (thumbnails, `mano_*.png`, dice icons) live in `client/static` and are referenced by root path (e.g. `/mano_1.png`).
 - `client/.npmrc` sets `engine-strict=true`.
+
+## Deploy (LIVE)
+- Backend → Render. `server/Dockerfile` (imagen `oven/bun:1`, `CMD bun run index.ts`) + `server/render.yaml` (Blueprint: web service docker, rootDir `server`, health `/health`, env group `dua-conecta-api-env` con todo `sync: false`). El server exige `DATABASE_URL` y `JWT_SECRET`; si `NODE_ENV=production` y `FRONTEND_URL` es localhost, imprime una advertencia. Tras el primer deploy, sembrar plantillas en la DB de producción desde la pestaña Shell de Render: `bun run seed.ts`.
+- Frontend → Vercel. `client/vercel.json` (framework sveltekit, build/install con npm; los scripts de `package.json` son npm-compatibles, sin `bun run`). `@sveltejs/adapter-auto` detecta `VERCEL` e instala `adapter-vercel@5` automáticamente en el build. Variables obligatorias en Vercel: `VITE_API_URL` y `PUBLIC_API_URL` (misma URL del backend).
+- CORS: dinámico con `ALLOWED_ORIGINS` (lista separada por comas; opcional) y regex para previews de Vercel (`*.dua-conecta.vercel.app`). `FRONTEND_URL` en Render debe ser la URL de Vercel (también se usa en el enlace de "recuperar contraseña").
+- Secrets de producción pendientes de rotar (estuvieron en git history): contraseña de aplicación Gmail del SMTP, `PIXABAY_API_KEY`, `PEXELS_API_KEY`, `DATABASE_URL` de Supabase. Los `.env` reales nunca se commitearon (`.gitignore`), y `server/.env.example` ya solo tiene placeholders.
 
 ## Conventions
 - All UI copy, server messages, comments, and commit messages are in Spanish — keep new user-facing strings/errors in Spanish.
