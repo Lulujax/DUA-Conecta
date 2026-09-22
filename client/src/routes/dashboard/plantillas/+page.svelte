@@ -9,7 +9,8 @@
 
     // Pre-populate from SSR if available; client-side onMount fills in if SSR returned empty
     let allTemplates: Array<any> = $state(data?.allTemplates ?? []);
-    let isLoading = $state(allTemplates.length === 0);
+    // Empieza cargando; onMount lo apaga (con datos SSR de inmediato, o tras el fetch)
+    let isLoading = $state(true);
     let selectedCategory = $state('Todas');
     let searchQuery = $state('');
 
