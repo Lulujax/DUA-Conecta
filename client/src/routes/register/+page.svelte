@@ -40,7 +40,7 @@
             }
             user.loginSuccess(res.user, res.token);
             toast.success('¡Cuenta creada!');
-            goto('/dashboard/plantillas');
+            goto('/dashboard');
         } catch (err: any) {
             toast.error(err.message || 'Error al registrarse.');
         } finally { isLoading = false; }

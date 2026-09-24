@@ -18,7 +18,7 @@
             }
             user.loginSuccess(res.user, res.token);
             toast.success(`Bienvenido, ${res.user.name}`);
-			goto('/dashboard/plantillas');
+			goto('/dashboard');
 		} catch (err: any) {
             toast.error(err.message || 'Credenciales incorrectas');
 		} finally { isLoading = false; }
