@@ -153,7 +153,7 @@
     .editor-main-area { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; background-color: var(--bg-section); }
     .editor-canvas-area { flex-grow: 1; display: flex; justify-content: center; align-items: flex-start; padding: 2rem; padding-top: 70px; overflow: auto; background-color: var(--bg-section); -webkit-overflow-scrolling: touch; }
 	.scale-wrapper { transform-origin: top center; transition: transform 0.3s ease; }
-    .canvas-container { position: relative; width: 700px; height: 990px; background-color: var(--bg-card, white); box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden; border: 1px solid var(--border-color, #ccc); flex-shrink: 0; }
+    .canvas-container { position: relative; width: 700px; height: 990px; background-color: #FFFFFF; box-shadow: 0 10px 30px rgba(0,0,0,0.15); overflow: hidden; border: 1px solid var(--border-color, #ccc); flex-shrink: 0; }
     .snap-line { position: absolute; background-color: #F472B6; z-index: 10000; pointer-events: none; }
     .snap-line.vertical { width: 2px; height: 100%; top: 0; }
     .snap-line.horizontal { height: 2px; width: 100%; left: 0; }
