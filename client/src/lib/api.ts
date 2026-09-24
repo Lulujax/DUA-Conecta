@@ -1,7 +1,7 @@
 import { browser } from '$app/environment';
 import { PUBLIC_API_URL } from '$env/static/public';
 
-const BASE_URL = PUBLIC_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const BASE_URL = (PUBLIC_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/+$/, '');
 const TOKEN_KEY = 'auth_token';
 
 export const API_BASE_URL = BASE_URL;
